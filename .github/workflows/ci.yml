@@ -29,9 +29,75 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      # ------------------------------------------------------------------
+      # Web E2E (Playwright) — activates automatically once Lane B lands
+      # apps/web. The hashFiles condition is empty while apps/web does not
+      # exist, so the step (and the artifact/cache steps around it) skip.
+      # Browsers are cached keyed on the lockfile; on failure the Playwright
+      # HTML report and raw test results are uploaded as artifacts.
+      # ------------------------------------------------------------------
+      - name: Cache Playwright browsers
+        if: ${{ hashFiles('apps/web/package.json') != '' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
       - name: Web E2E
         if: ${{ hashFiles('apps/web/package.json') != '' }}
         run: pnpm e2e:web
+      - name: Upload Playwright report
+        if: ${{ failure() && (hashFiles('apps/web/package.json') != '') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            playwright-report/
+          retention-days: 7
+      - name: Upload Playwright test results
+        if: ${{ failure() && (hashFiles('apps/web/package.json') != '') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: |
+            apps/web/test-results/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 7
+      # ------------------------------------------------------------------
+      # Mobile E2E (Maestro): intentionally NOT a CI job. GitHub-hosted
+      # runners have no mobile simulators; Maestro flows run locally or on
+      # a self-hosted runner with simulators. The Maestro project/config
+      # is checked in by Lane B (maestro/, M0-B) — see
+      # orchestration/REPORT.md for the runner-based CI story.
+      # ------------------------------------------------------------------
+
+  # Worker dry-run bundle checks: `wrangler deploy --dry-run --outdir=dist`
+  # needs NO credentials (no account_id, no routes — dev shells). Steps
+  # activate automatically when the apps appear (hashFiles conditions).
+  workers:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build API Worker (wrangler dry-run bundle)
+        if: ${{ hashFiles('apps/api/package.json') != '' }}
+        run: pnpm --filter @orbb/api build
+      - name: Build async consumer Worker (wrangler dry-run bundle)
+        if: ${{ hashFiles('apps/worker/package.json') != '' }}
+        run: pnpm --filter @orbb/worker build
 
   security:
     runs-on: ubuntu-latest

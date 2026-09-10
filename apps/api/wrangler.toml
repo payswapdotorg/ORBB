@@ -1,0 +1,10 @@
+# ORBB API Worker — M0 development shell.
+#
+# Intentionally NO account_id, NO routes, NO bindings, NO secrets:
+# this config exists so `wrangler deploy --dry-run --outdir=dist`
+# (the `pnpm build` step) bundles the Worker WITHOUT any credentials.
+# Real deployment bindings (queues, R2, D1/Neon, secrets) are added by
+# the platform lane in later milestones.
+name = "orbb-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
