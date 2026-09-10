@@ -1,0 +1,38 @@
+{
+  "name": "@orbb/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ORBB web shell (M0-B): Next.js App Router foundation with role-aware navigation placeholders (Overview | Intents | Measurements | DataBox | Care | Research | Marketplace | Settings), accessibility foundations, and the Playwright smoke-journey harness. Consumes @orbb/ui design tokens. No real medical data, no backend calls.",
+  "scripts": {
+    "dev": "next dev --port 3100",
+    "build": "next build",
+    "start": "next start --port 3100",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "playwright test --project=chromium"
+  },
+  "dependencies": {
+    "@orbb/ui": "workspace:*",
+    "next": "^16.3.4",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^22.20.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^9.30.0",
+    "jsdom": "^30.0.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}

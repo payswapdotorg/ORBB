@@ -44,6 +44,10 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             playwright-${{ runner.os }}-
+      - name: Install Playwright browsers
+        if: ${{ hashFiles('apps/web/package.json') != '' }}
+        working-directory: apps/web
+        run: pnpm exec playwright install chromium --with-deps
       - name: Web E2E
         if: ${{ hashFiles('apps/web/package.json') != '' }}
         run: pnpm e2e:web

@@ -18,3 +18,4 @@ test-results/
 wrangler.toml.local
 *.pem
 *.key
+apps/web/tsconfig.tsbuildinfo
