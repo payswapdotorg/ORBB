@@ -14,9 +14,11 @@ describe("canonical domain event types", () => {
       "PLAN_PUBLISHED",
       "TASK_DUE",
       "OBSERVATION_RECORDED",
+      "OBSERVATION_SUPERSEDED",
       "EVIDENCE_INGESTED",
       "ACCESS_GRANTED",
       "ACCESS_REVOKED",
+      "ACCESS_EVALUATED",
       "SERVICE_ORDER_CREATED",
       "SERVICE_ORDER_FULFILLED",
       "EXTENSION_INSTALLED",
@@ -46,15 +48,17 @@ describe("canonical domain event types", () => {
       "PLAN_PUBLISHED",
       "TASK_DUE",
       "OBSERVATION_RECORDED",
+      "OBSERVATION_SUPERSEDED",
       "EVIDENCE_INGESTED",
       "ACCESS_GRANTED",
       "ACCESS_REVOKED",
+      "ACCESS_EVALUATED",
       "SERVICE_ORDER_CREATED",
       "SERVICE_ORDER_FULFILLED",
       "EXTENSION_INSTALLED",
       "STUDY_ENROLLED",
       "SAFETY_FLAG_RAISED",
     ];
-    expect(assignments).toHaveLength(12);
+    expect(assignments).toHaveLength(14);
   });
 });

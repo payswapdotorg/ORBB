@@ -4,9 +4,13 @@ import { parsePersonId, parsePlanId, parseIntentId } from "./ids.js";
 import {
   INTENT_STATE_TRANSITIONS,
   allowedIntentTransitions,
+  assertHealthIntent,
   assertIntentTransition,
   canTransitionIntent,
+  isEvidencePackVersion,
+  isHealthIntent,
   isIntentState,
+  parseEvidencePackVersion,
   parseIntentState,
   type HealthIntent,
 } from "./intent.js";
@@ -90,3 +94,84 @@ describe("intent state machine", () => {
     expect(intent.planId).toBeUndefined();
   });
 });
+
+describe("evidence pack version (M1 gap review)", () => {
+  it("accepts positive integers", () => {
+    expect(isEvidencePackVersion(1)).toBe(true);
+    expect(parseEvidencePackVersion(3)).toBe(3);
+    expect(isEvidencePackVersion(1_000)).toBe(true);
+  });
+
+  it("rejects zero, negatives, non-integers, and non-numbers", () => {
+    expect(isEvidencePackVersion(0)).toBe(false);
+    expect(isEvidencePackVersion(-1)).toBe(false);
+    expect(isEvidencePackVersion(1.5)).toBe(false);
+    expect(isEvidencePackVersion("3")).toBe(false);
+    expect(() => parseEvidencePackVersion(0)).toThrow(DomainInvariantError);
+    expect(() => parseEvidencePackVersion(1.5)).toThrow(DomainInvariantError);
+    expect(() => parseEvidencePackVersion(null)).toThrow(DomainInvariantError);
+  });
+});
+
+describe("health intent structural guard (M1 gap review)", () => {
+  it("accepts a well-formed intent with and without optional fields", () => {
+    const intent: HealthIntent = {
+      id: parseIntentId(`intent_${BODY}`),
+      personId: parsePersonId(`prsn_${BODY}`),
+      objective: "Lower resting heart rate below 60 bpm",
+      state: "active",
+      createdAt: new Date("2025-01-01T00:00:00.000Z"),
+      evidencePackVersion: 3,
+      planId: parsePlanId(`plan_${BODY}`),
+    };
+    expect(isHealthIntent(intent)).toBe(true);
+    expect(() => assertHealthIntent(intent)).not.toThrow();
+
+    const minimal: HealthIntent = {
+      id: parseIntentId(`intent_${BODY}`),
+      personId: parsePersonId(`prsn_${BODY}`),
+      objective: "Walk 8k steps daily",
+      state: "draft",
+      createdAt: new Date("2025-01-01T00:00:00.000Z"),
+    };
+    expect(isHealthIntent(minimal)).toBe(true);
+  });
+
+  it("rejects malformed ids, empty objectives, illegal states, bad dates, and bad optional fields", () => {
+    expect(isHealthIntent(null)).toBe(false);
+    expect(
+      isHealthIntent({ ...minimalIntent(), id: "not-an-intent-id" as unknown as HealthIntent["id"] }),
+    ).toBe(false);
+    expect(
+      isHealthIntent({ ...minimalIntent(), personId: "intent_x" as unknown as HealthIntent["personId"] }),
+    ).toBe(false);
+    expect(isHealthIntent({ ...minimalIntent(), objective: "" })).toBe(false);
+    expect(
+      isHealthIntent({ ...minimalIntent(), state: "sleeping" as unknown as HealthIntent["state"] }),
+    ).toBe(false);
+    expect(isHealthIntent({ ...minimalIntent(), createdAt: new Date("not-a-date") })).toBe(false);
+    expect(
+      isHealthIntent({ ...minimalIntent(), evidencePackVersion: 0 as unknown as number }),
+    ).toBe(false);
+    expect(
+      isHealthIntent({ ...minimalIntent(), planId: "junk" as unknown as HealthIntent["planId"] }),
+    ).toBe(false);
+    expect(() => assertHealthIntent(null)).toThrow(DomainInvariantError);
+    expect(() => assertHealthIntent({ ...minimalIntent(), objective: "" })).toThrow(
+      DomainInvariantError,
+    );
+    expect(
+      () => assertHealthIntent({ ...minimalIntent(), evidencePackVersion: 0 as unknown as number }),
+    ).toThrow(DomainInvariantError);
+  });
+});
+
+function minimalIntent(): HealthIntent {
+  return {
+    id: parseIntentId(`intent_${BODY}`),
+    personId: parsePersonId(`prsn_${BODY}`),
+    objective: "Walk 8k steps daily",
+    state: "draft",
+    createdAt: new Date("2025-01-01T00:00:00.000Z"),
+  };
+}

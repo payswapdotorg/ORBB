@@ -4,8 +4,10 @@ import { parseGrantId, parsePersonId } from "./ids.js";
 import {
   GRANT_STATE_TRANSITIONS,
   allowedGrantTransitions,
+  assertAccessGrant,
   assertGrantTransition,
   canTransitionGrant,
+  isAccessGrant,
   isGrantState,
   parseGrantState,
   type AccessGrant,
@@ -54,3 +56,56 @@ describe("grant state machine", () => {
     expect(grant.scope).toEqual(["observations:read", "intent:read"]);
   });
 });
+
+describe("access grant structural guard (M1 gap review)", () => {
+  it("accepts a well-formed grant", () => {
+    expect(isAccessGrant(minimalGrant())).toBe(true);
+    expect(() => assertAccessGrant(minimalGrant())).not.toThrow();
+  });
+
+  it("rejects an empty scope (a grant that grants nothing)", () => {
+    const empty = { ...minimalGrant(), scope: [] as string[] };
+    expect(isAccessGrant(empty)).toBe(false);
+    expect(() => assertAccessGrant(empty)).toThrow(DomainInvariantError);
+  });
+
+  it("rejects blank or non-string scope entries", () => {
+    expect(isAccessGrant({ ...minimalGrant(), scope: [""] })).toBe(false);
+    expect(isAccessGrant({ ...minimalGrant(), scope: ["observations:read", 42] })).toBe(false);
+    expect(() => assertAccessGrant({ ...minimalGrant(), scope: [""] })).toThrow(
+      DomainInvariantError,
+    );
+  });
+
+  it("rejects malformed ids, labels, states, and expiry dates", () => {
+    expect(isAccessGrant(null)).toBe(false);
+    expect(
+      isAccessGrant({ ...minimalGrant(), id: "junk" as unknown as AccessGrant["id"] }),
+    ).toBe(false);
+    expect(
+      isAccessGrant({ ...minimalGrant(), subjectId: "junk" as unknown as AccessGrant["subjectId"] }),
+    ).toBe(false);
+    expect(isAccessGrant({ ...minimalGrant(), recipientId: "" })).toBe(false);
+    expect(isAccessGrant({ ...minimalGrant(), purpose: "" })).toBe(false);
+    expect(
+      isAccessGrant({ ...minimalGrant(), state: "expired" as unknown as AccessGrant["state"] }),
+    ).toBe(false);
+    expect(isAccessGrant({ ...minimalGrant(), expiresAt: new Date("not-a-date") })).toBe(false);
+    expect(() => assertAccessGrant(null)).toThrow(DomainInvariantError);
+    expect(() =>
+      assertAccessGrant({ ...minimalGrant(), expiresAt: new Date("not-a-date") }),
+    ).toThrow(DomainInvariantError);
+  });
+});
+
+function minimalGrant(): AccessGrant {
+  return {
+    id: parseGrantId(`grant_${BODY}`),
+    subjectId: parsePersonId(`prsn_${BODY}`),
+    recipientId: "recipient-clinic-42",
+    purpose: "CARE_MANAGEMENT",
+    scope: ["observations:read"],
+    state: "active",
+    expiresAt: new Date("2026-01-01T00:00:00.000Z"),
+  };
+}

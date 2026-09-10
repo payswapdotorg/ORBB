@@ -13,3 +13,6 @@ export * from "./intent.js";
 export * from "./observation.js";
 export * from "./plan.js";
 export * from "./grant.js";
+export * from "./metric.js";
+export * from "./method.js";
+export * from "./access.js";

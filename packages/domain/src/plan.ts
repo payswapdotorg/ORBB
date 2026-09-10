@@ -15,6 +15,8 @@
  * `published` may only be activated. Cancellation happens from `active`.
  */
 import type { IntentId, PersonId, PlanId } from "./ids.js";
+import { isIdOf } from "./ids.js";
+import { DomainInvariantError } from "./errors.js";
 import {
   allowedTransitions,
   assertTransition,
@@ -66,4 +68,59 @@ export function canTransitionPlan(from: PlanState, to: PlanState): boolean {
 /** Throws {@link import("./errors.js").DomainInvariantError} on illegal transitions. */
 export function assertPlanTransition(from: PlanState, to: PlanState): void {
   assertTransition(PLAN_STATE_TRANSITIONS, from, to, "plan");
+}
+
+// ---------------------------------------------------------------------------
+// Structural guard (M1 gap review: `metrics` is the list of concept codes a
+// plan commits to measure — an empty list, or blank codes, is a plan that
+// measures nothing; nothing enforced it. Added additively; working code is
+// unchanged).
+// ---------------------------------------------------------------------------
+
+function isTimestamp(value: unknown): value is Date {
+  return value instanceof Date && !Number.isNaN(value.getTime());
+}
+
+export function isMeasurementPlan(value: unknown): value is MeasurementPlan {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Partial<Record<keyof MeasurementPlan, unknown>>;
+  if (!isIdOf("plan", candidate.id)) {
+    return false;
+  }
+  if (!isIdOf("person", candidate.personId)) {
+    return false;
+  }
+  if (!isIdOf("intent", candidate.intentId)) {
+    return false;
+  }
+  if (!isPlanState(candidate.state)) {
+    return false;
+  }
+  if (!Array.isArray(candidate.metrics) || candidate.metrics.length === 0) {
+    return false;
+  }
+  for (const code of candidate.metrics) {
+    if (typeof code !== "string" || code.length === 0) {
+      return false;
+    }
+  }
+  if (!isTimestamp(candidate.createdAt)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Pure guard: asserts that `candidate` is a well-formed
+ * {@link MeasurementPlan}. Throws {@link DomainInvariantError} describing
+ * the expected shape — received values are never echoed.
+ */
+export function assertMeasurementPlan(candidate: unknown): asserts candidate is MeasurementPlan {
+  if (!isMeasurementPlan(candidate)) {
+    throw new DomainInvariantError(
+      "Invalid measurement plan: expected { id, personId, intentId, state, metrics, createdAt } with canonical ids, a legal plan state, a non-empty list of non-empty metric concept codes, and a valid creation timestamp.",
+    );
+  }
 }
