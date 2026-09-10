@@ -1,0 +1,23 @@
+{
+  "name": "@orbb/databox",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DataBox boundary for ORBB: will own evidence/object abstractions and envelope encryption over the object plane. M0 boundary package — re-exports the evidence-plane types it will own.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "@orbb/domain": "workspace:*",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}

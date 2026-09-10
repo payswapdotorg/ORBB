@@ -1,0 +1,25 @@
+{
+  "name": "@orbb/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cross-service contracts for ORBB: the canonical domain event envelope (architecture §11), the event-type union, and the transactional outbox record interface.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@orbb/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}
