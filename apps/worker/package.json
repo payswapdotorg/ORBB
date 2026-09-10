@@ -1,0 +1,23 @@
+{
+  "name": "@orbb/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ORBB async consumer Worker — M0 shell: no-op queue-drain stub plus a GET /healthz probe (Hono). Builds with `wrangler deploy --dry-run --outdir=dist` (no credentials, no account_id, no routes).",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "wrangler deploy --dry-run --outdir=dist",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "eslint": "^9.30.0",
+    "hono": "^4.13.7",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.130.0"
+  }
+}

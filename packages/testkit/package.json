@@ -1,0 +1,25 @@
+{
+  "name": "@orbb/testkit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic test toolkit for ORBB: injectable Clock, monotonic seeded id factory, synthetic domain fixtures tagged synthetic:true (never real patient data), and the per-suite TestReset strategy. Zero runtime dependencies beyond @orbb/domain contracts.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@orbb/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}
