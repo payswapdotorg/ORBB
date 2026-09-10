@@ -1,28 +1,30 @@
 # ORBB Orchestration Status
 
-current_milestone: M0 — repository foundation
+current_milestone: M1 — domain kernel (M0 COMPLETE)
 architecture_status: FROZEN FOR IMPLEMENTATION
-implementation_status: IN PROGRESS (M0-A + M0-C merged; M0-B dispatched, awaiting generation slot)
-active_worker_slots: 1/3 (m0-b-ui accepted+queued; peak-hour GLM-5.3 capacity)
-latest_green_commit: 09a7d3f (Merge PR #5: M0-C CI/test harness)
-preview_url: none (lands with M0-B web shell)
-last_dogfood: none (no user-visible surface yet)
+implementation_status: M0 COMPLETE — all three lanes merged, exit criteria verified
+active_worker_slots: 0/3 (M1 dispatch in flight)
+latest_green_commit: 96c267a (Merge PR #6: M0-B web/mobile UI foundation)
+preview_url: none (Vercel preview pending operator account link; web shell dogfooded locally by lead)
+last_dogfood: 2026-09-10 18:5x UTC — lead exercised the web shell end-to-end (role switch, emphasis, DataBox journey; VLM-verified screenshots)
 last_audit: 2026-09-10 — session audit by resident tech lead
+
+milestone_M0_evidence:
+- PR #4 (M0-A, Lane A): 8 packages, 86 tests. CI green.
+- PR #5 (M0-C, Lane C): testkit 43 + platform 22 + workers 4 tests; wrangler dry-run builds credential-free; CI hardening. CI green.
+- PR #6 (M0-B, Lane B): ui 34 + web 8 + mobile 5 tests; Playwright chromium journey green in CI AND lead sandbox; maestro config checked in. CI green.
+- Exit criteria (all verified on fresh main @ 96c267a): clean frozen install, lint 15/15, typecheck 15/15, unit tests 202+, web build 13/13, mobile typecheck, both Worker dry-run builds, Web E2E green, lead dogfood of user journey complete.
+
 known_risks:
 - Free-tier infrastructure is suitable for development and early experimentation, not automatically a regulated production environment.
 - Mobile health APIs require native platform permissions and real-device validation.
 - Clinical/research features require jurisdiction-specific governance before real-world use.
-- GLM-5.3 capacity popups intermittently block worker dispatch; assault loop retries per operator policy (never wait).
-- gitleaks required full-history checkout (fixed in PR #4).
-
-completed:
-- M0-A (PR #4, Lane A): 8 packages — domain (51 tests), contracts (20), config (13), boundary shells db/auth/databox/measurement/consent. CI green.
-- M0-C (PR #5, Lane C): packages/testkit (43 tests) + platform (22 tests), apps/api + apps/worker (wrangler dry-run builds), CI Playwright wiring + workers job, orchestration/REPORT.md. CI green. Total workspace tests: 155.
-
-in_flight:
-- M0-B (Lane B): web/mobile shells, packages/ui tokens, Playwright + Maestro smoke journeys. Session accepted (queued server-side); prior queued sessions were destroyed by the site during peak hours — dispatcher re-arms automatically.
+- GLM-5.3 capacity/usage windows intermittently gate worker dispatch (mitigations: two-state acceptance protocol, per-session recovery flags, dashboard sandbox release, hard-freeze discipline — see replay2 AGENT_BOOT_PROMPT.md learnings 9-16).
+- Vercel preview deployment pending operator account link.
 
 next_dispatch:
-- After M0-B/M0-C land: verify M0 exit criteria (clean install, typecheck, lint, unit test, web build, mobile typecheck, Worker build), dogfood web shell, close M0, dispatch M1 (domain kernel) in three packets.
+- M1-A (Lane A): domain kernel deepening — MetricDefinition/MeasurementMethod/capability, observation supersession lifecycle, deny-by-default access evaluation engine.
+- M1-B (Lane B): packages/ui component library expansion (forms, disclosure, table, timeline, consent sheet, capture controls, charts).
+- M1-C (Lane C): packages/observability — structured logging, PHI redaction engine, trace primitives, request envelope.
 
 Do not mark this file green until actual code, tests, and preview verification exist.
