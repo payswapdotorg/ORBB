@@ -1,0 +1,22 @@
+{
+  "name": "@orbb/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Persistence boundary for ORBB: will own the Drizzle schema, migrations, and repositories (structured ledger + transactional outbox). M0 boundary package — no runtime behavior yet.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}

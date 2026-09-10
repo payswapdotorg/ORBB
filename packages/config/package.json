@@ -1,0 +1,25 @@
+{
+  "name": "@orbb/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Environment/config contracts for ORBB: a typed Environment interface and parseEnvironment validation that reports only variable NAMES — never values. The only ORBB package permitted to depend on zod.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}
