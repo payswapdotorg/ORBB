@@ -24,13 +24,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - name: Install dependencies
-        run: |
-          if [ -f pnpm-lock.yaml ]; then
-            pnpm install --frozen-lockfile
-          else
-            echo "::warning::pnpm-lock.yaml is not present yet; M0-C must generate it before implementation proceeds."
-            pnpm install --no-frozen-lockfile
-          fi
+        run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
