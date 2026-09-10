@@ -1,0 +1,21 @@
+maestro/README.md
+```markdown
+# Maestro — ORBB mobile journeys
+
+Maestro drives the ORBB mobile shell at the accessibility layer (no app
+instrumentation). This directory holds the M0-B smoke journey that the tech
+lead will extend as real surfaces land.
+
+## Files
+
+- `flows/smoke.yaml` — the M0-B synthetic smoke journey: launch the Expo app,
+  assert the five tab labels (`Today | Health | DataBox | Services | You`),
+  tap `DataBox`, assert the screen title and the `Coming in M6+` placeholder
+  notice.
+
+## Running locally
+
+1. **Install Maestro** (one-time):
+
+   ```bash
+   curl -Ls "https://get.maestro.mobile.dev" | bash

@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "ORBB",
+    "slug": "orbb-mobile",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "orbb",
+    "platforms": ["ios", "android"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdSuffix": ".orbb"
+    },
+    "android": {
+      "package": "org.orbb.mobile"
+    },
+    "_comment": "Synthetic M0 shell. No API keys, no credentials, no real medical data. CI typechecks only — no native build is produced at M0."
+  }
+}

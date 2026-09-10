@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+/*
+ * ORBB web shell — Tailwind CSS v4 theme.
+ *
+ * `@theme inline` maps Tailwind utility namespaces onto the
+ * `--orbb-*` custom properties that `src/app/layout.tsx` generates from
+ * `@orbb/ui` tokens (injected as a <style> element). This is the load-bearing
+ * link proving the web shell consumes the token package: utilities such as
+ * `bg-canvas`, `text-fg`, `border-border` resolve to token values at runtime.
+ */
+@theme inline {
+  --color-canvas: var(--orbb-color-canvas);
+  --color-surface: var(--orbb-color-surface);
+  --color-fg: var(--orbb-color-fg-primary);
+  --color-fg-muted: var(--orbb-color-fg-muted);
+  --color-fg-subtle: var(--orbb-color-fg-subtle);
+  --color-accent: var(--orbb-color-accent);
+  --color-accent-hover: var(--orbb-color-accent-hover);
+  --color-accent-subtle: var(--orbb-color-accent-subtle);
+  --color-accent-fg: var(--orbb-color-accent-fg);
+  --color-danger: var(--orbb-color-danger);
+  --color-danger-subtle: var(--orbb-color-danger-subtle);
+  --color-border-subtle: var(--orbb-color-border-subtle);
+  --color-border-strong: var(--orbb-color-border-strong);
+
+  --font-sans: var(--orbb-typography-family-sans);
+
+  --text-body: var(--orbb-typography-size-md);
+  --text-body--line-height: var(--orbb-typography-line-height-normal);
+  --text-lead: var(--orbb-typography-size-lg);
+  --text-lead--line-height: var(--orbb-typography-line-height-tight);
+
+  --radius-card: var(--orbb-radius-md);
+}
+
+/*
+ * Accessibility foundations.
+ *
+ * 1. Visible focus for keyboard users, drawn from focus-ring tokens
+ *    (WCAG 2.4.7 / 2.4.11: contrast and offset come from the token pair).
+ * 2. `prefers-reduced-motion: reduce` disables non-essential motion.
+ * 3. Skip link is visually hidden until focused.
+ */
+@layer base {
+  :focus-visible {
+    outline: var(--orbb-focus-ring-width) var(--orbb-focus-ring-style)
+      var(--orbb-focus-ring-color);
+    outline-offset: var(--orbb-focus-ring-offset);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .skip-link {
+    position: absolute;
+    left: var(--orbb-spacing-2);
+    top: var(--orbb-spacing-2);
+    z-index: 50;
+    transform: translateY(-200%);
+    transition: transform var(--orbb-motion-duration-fast)
+      var(--orbb-motion-easing-standard);
+  }
+
+  .skip-link:focus-visible {
+    transform: translateY(0);
+  }
+}
