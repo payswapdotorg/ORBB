@@ -17,6 +17,8 @@
  *     ACCESS_REVOKED events: active -> revoked (terminal).
  */
 import type { GrantId, PersonId } from "./ids.js";
+import { isIdOf } from "./ids.js";
+import { DomainInvariantError } from "./errors.js";
 import {
   allowedTransitions,
   assertTransition,
@@ -68,4 +70,62 @@ export function canTransitionGrant(from: GrantState, to: GrantState): boolean {
 /** Throws {@link import("./errors.js").DomainInvariantError} on illegal transitions. */
 export function assertGrantTransition(from: GrantState, to: GrantState): void {
   assertTransition(GRANT_STATE_TRANSITIONS, from, to, "grant");
+}
+
+// ---------------------------------------------------------------------------
+// Structural guard (M1 gap review: scope entries and expiry were plain,
+// unvalidated data — an empty scope, blank/non-string permission entries,
+// or an invalid expiry Date are illegal states nothing detected. Added
+// additively; working code is unchanged).
+// ---------------------------------------------------------------------------
+
+function isTimestamp(value: unknown): value is Date {
+  return value instanceof Date && !Number.isNaN(value.getTime());
+}
+
+export function isAccessGrant(value: unknown): value is AccessGrant {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Partial<Record<keyof AccessGrant, unknown>>;
+  if (!isIdOf("grant", candidate.id)) {
+    return false;
+  }
+  if (!isIdOf("person", candidate.subjectId)) {
+    return false;
+  }
+  if (typeof candidate.recipientId !== "string" || candidate.recipientId.length === 0) {
+    return false;
+  }
+  if (typeof candidate.purpose !== "string" || candidate.purpose.length === 0) {
+    return false;
+  }
+  if (!Array.isArray(candidate.scope) || candidate.scope.length === 0) {
+    return false;
+  }
+  for (const permission of candidate.scope) {
+    if (typeof permission !== "string" || permission.length === 0) {
+      return false;
+    }
+  }
+  if (!isGrantState(candidate.state)) {
+    return false;
+  }
+  if (!isTimestamp(candidate.expiresAt)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Pure guard: asserts that `candidate` is a well-formed {@link AccessGrant}.
+ * Throws {@link DomainInvariantError} describing the expected shape —
+ * received values are never echoed.
+ */
+export function assertAccessGrant(candidate: unknown): asserts candidate is AccessGrant {
+  if (!isAccessGrant(candidate)) {
+    throw new DomainInvariantError(
+      "Invalid access grant: expected { id, subjectId, recipientId, purpose, scope, state, expiresAt } with canonical ids, non-empty recipient/purpose labels, a non-empty list of non-empty permission identifiers, a legal grant state, and a valid expiry timestamp.",
+    );
+  }
 }
