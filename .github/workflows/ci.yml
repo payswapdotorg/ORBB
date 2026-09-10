@@ -23,11 +23,21 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile=false
+      - name: Install dependencies
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            echo "::warning::pnpm-lock.yaml is not present yet; M0-C must generate it before implementation proceeds."
+            pnpm install --no-frozen-lockfile
+          fi
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - name: Web E2E
+        if: ${{ hashFiles('apps/web/package.json') != '' }}
+        run: pnpm e2e:web
 
   security:
     runs-on: ubuntu-latest
