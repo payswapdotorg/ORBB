@@ -1,0 +1,10 @@
+# ORBB async consumer Worker — M0 development shell.
+#
+# Intentionally NO account_id, NO routes, NO queue consumer bindings, NO
+# secrets: this config exists so `wrangler deploy --dry-run --outdir=dist`
+# (the `pnpm build` step) bundles the Worker WITHOUT any credentials.
+# The queue-drain stub in src/index.ts activates when a consumer binding
+# is configured by the platform lane in later milestones.
+name = "orbb-worker"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"

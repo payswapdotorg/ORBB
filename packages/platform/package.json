@@ -1,0 +1,22 @@
+{
+  "name": "@orbb/platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deployment adapter interfaces and environment matrix for ORBB (architecture provider map): WebHost, HttpRuntime, EventBus/JobRunner, ObjectStore, SqlStore, Cache/RateLimiter. Pure TypeScript — zero runtime dependencies, no provider SDK imports. In-memory reference implementations exist ONLY for Cache/RateLimiter (test use).",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}
