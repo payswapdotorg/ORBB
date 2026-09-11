@@ -3,8 +3,8 @@
 current_milestone: M2 — persistence/DataBox (IN PROGRESS: m2-a + m2-c dispatched)
 architecture_status: FROZEN FOR IMPLEMENTATION
 implementation_status: M0 + M1 COMPLETE — all six packets merged (PRs #4-#9), exit criteria verified
-active_worker_slots: 1/3 (m2-a-persistence queued; m2-c slot freed on merge)
-latest_green_commit: a79566b (Merge PR #10: M2-C object store + encryption + upload flow)
+active_worker_slots: 0/3 (M2-A + M2-C merged; M2-D integration packet dispatching for exit criterion)
+latest_green_commit: 43249bb (Merge PR #11: M2-A persistence core — schema/repos/outbox/audit)
 preview_url: none (Vercel preview pending operator account link; web shell dogfooded locally by lead)
 last_dogfood: 2026-09-10 18:5x UTC — lead exercised the web shell end-to-end (role switch, emphasis, DataBox journey; VLM-verified screenshots)
 last_audit: 2026-09-10 — session audit by resident tech lead
@@ -27,12 +27,13 @@ merged_in_M1:
 - M1-B (PR #8, Lane B): design-system component library — forms/disclosure/card+table/timeline/consent-sheet/measurement-controls/SVG charts + usePrefersReducedMotion; @orbb/ui 34->176 tests (142 new); react-dom peerDependency (ConsentSheet portal).
 - M1-C (PR #9, Lane C): @orbb/observability — structured logger, deny-by-default PHI redaction engine (hash-once pseudonyms), trace primitives, route-pattern-only request envelope; zero runtime deps; 73 tests / 236 assertions + 28 not.toContain PHI proofs. Lockfile +18 lines (new importer).
 - M2-C (PR #10, Lane C): @orbb/databox real content — R2ObjectStore (hand-rolled SigV4, no aws-sdk, presigned PUT/GET), KeyProvider/SecretKeyProvider/EnvelopeEncryptor (HKDF+AES-256-GCM, context binding), UploadSessionService (§6 flow, idempotent finalize, TTL, exactly-once EVIDENCE_INGESTED); 115 tests; lockfile +13/-3. Contract handoffs recorded: EvidenceIngestedEvent -> contracts promotion, platform ObjectStore gaps (in-memory double, contentType N+1, presign seam), Lane A outbox closing the post-commit event gap, live-R2 verification in deployment packet.
+- M2-A (PR #11, Lane A): @orbb/db real content — 11-table Drizzle schema (opaque domain ids as PKs, id-grammar CHECKs, frozen vocabularies), additive migrations (append-only trigger on access_audits), 9 repos + UnitOfWork transactional outbox, idempotency ledger, pure cursor pagination; PGlite harness executes real migration SQL; 104 db tests + 19 databox (A18) tests; workspace 767 passed. Gitleaks false-positive on a synthetic fixture resolved by branch squash (string never in history; scanner at full sensitivity).
 - M1 EXIT verified on fresh main a56bee4: frozen install 0, lint 16/16, typecheck 16/16, test 16/16 (530 tests), build 14/14; domain 162 tests cover ALL state machines' legal grammars + illegal transitions + terminal states + self-loops (intent/plan/observation+supersession/grant/access audited by name).
 
 in_flight:
-- M2-A (Lane A): packages/db Drizzle schema/migrations/repositories/outbox/audit + A18 checksum validation. Session queued (/c/78796dfe); watcher assault #2 due ~04:00.
+- M2-D (Lane A): db-backed EvidenceMetadataStore adapter + E2E synthetic journey (upload -> finalize -> retrieval -> audit) + outbox closing the post-commit event gap — the M2 exit-criterion packet (handoffs from M2-C + M2-A reports).
 
 next_dispatch:
-- After M2-A/M2-C: M2 exit check (evidence upload -> metadata -> retrieval -> audit end-to-end with synthetic data), then M3 (API + identity) packets.
+- After M2-D: M2 exit check (E2E journey green), then M3 (API + identity) packets: router/errors, auth/session, person/account management, evidence+observation endpoints.
 
 Do not mark this file green until actual code, tests, and preview verification exist.
