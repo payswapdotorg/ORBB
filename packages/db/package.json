@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Persistence boundary for ORBB: will own the Drizzle schema, migrations, and repositories (structured ledger + transactional outbox). M0 boundary package — no runtime behavior yet.",
+  "description": "Persistence boundary for ORBB (M2-A): Drizzle pg schema + additive migrations for the M0/M1 domain families, domain-shaped repositories with idempotency keys, cursor pagination, the transactional outbox (§4) Db facade, and the append-only access audit (A20). postgres.js driver for Neon Postgres; PGlite in-memory harness for tests.",
   "main": "./dist/index.js",
   "types": "./src/index.ts",
   "scripts": {
@@ -13,10 +13,19 @@
     "build": "tsc -p tsconfig.json"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.2.17",
     "@eslint/js": "^9.30.0",
+    "@orbb/testkit": "workspace:*",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9.30.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.30.0",
     "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@orbb/contracts": "workspace:*",
+    "@orbb/domain": "workspace:*",
+    "drizzle-orm": "^0.44.7",
+    "postgres": "^3.4.9"
   }
 }
