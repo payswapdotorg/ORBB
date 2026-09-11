@@ -1,10 +1,10 @@
 # ORBB Orchestration Status
 
-current_milestone: M1 — domain kernel (IN PROGRESS: M1-A merged)
+current_milestone: M1 — domain kernel (IN PROGRESS: M1-A + M1-B merged)
 architecture_status: FROZEN FOR IMPLEMENTATION
 implementation_status: M0 COMPLETE — all three lanes merged, exit criteria verified
-active_worker_slots: 2/3 (m1-b-ui, m1-c-observability accepted+queued; usage window gates generation)
-latest_green_commit: d9471bc (Merge PR #7: M1-A domain kernel)
+active_worker_slots: 1/3 (m1-c-observability queued-capacity; m1-b-ui slot freed on merge)
+latest_green_commit: cd08099 (Merge PR #8: M1-B component library)
 preview_url: none (Vercel preview pending operator account link; web shell dogfooded locally by lead)
 last_dogfood: 2026-09-10 18:5x UTC — lead exercised the web shell end-to-end (role switch, emphasis, DataBox journey; VLM-verified screenshots)
 last_audit: 2026-09-10 — session audit by resident tech lead
@@ -23,11 +23,11 @@ known_risks:
 - Vercel preview deployment pending operator account link.
 
 merged_in_M1:
-- M1-A (PR #7, Lane A): metric/method/capability + supersession lifecycle + deny-by-default access evaluation; domain 51->162 tests; contracts +2 event types (OBSERVATION_SUPERSEDED, ACCESS_EVALUATED). Workspace 315 tests.
+- M1-A (PR #7, Lane A): metric/method/capability + supersession lifecycle + deny-by-default access evaluation; domain 51->162 tests; contracts +2 event types (OBSERVATION_SUPERSEDED, ACCESS_EVALUATED).
+- M1-B (PR #8, Lane B): design-system component library — forms/disclosure/card+table/timeline/consent-sheet/measurement-controls/SVG charts + usePrefersReducedMotion; @orbb/ui 34->176 tests (142 new); react-dom peerDependency (ConsentSheet portal). Workspace 457 tests.
 
 in_flight:
-- M1-B (Lane B): packages/ui component library expansion. Session accepted (/c/df56ff9c), queued behind usage window.
-- M1-C (Lane C): packages/observability (PHI redaction). Session accepted (/c/64030b63), queued behind usage window.
+- M1-C (Lane C): packages/observability (PHI redaction engine, structured logger, trace primitives). Session accepted (/c/65371bbd), queued-capacity behind evening peak; queue_watch staleness-assault armed (0/5 historical queued-zombies ever self-recovered — fresh dispatch beats them).
 
 next_dispatch:
 - After M1-B/M1-C: M1 exit check (all transitions + illegal states covered), then M2 (persistence/DataBox) packets: M2-A schema/migrations/repositories/audit; M2-C object store/encryption/upload flow (rebalanced lanes — M2 roadmap items are all Lane A; lead splits by stable interface boundaries).
