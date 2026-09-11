@@ -98,10 +98,12 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build API Worker (wrangler dry-run bundle)
         if: ${{ hashFiles('apps/api/package.json') != '' }}
-        run: pnpm --filter @orbb/api build
+        # dotted filter: build workspace dependencies FIRST (@orbb/domain is a
+        # runtime import since M3-A — its dist must exist before wrangler bundles)
+        run: pnpm --filter "@orbb/api..." build
       - name: Build async consumer Worker (wrangler dry-run bundle)
         if: ${{ hashFiles('apps/worker/package.json') != '' }}
-        run: pnpm --filter @orbb/worker build
+        run: pnpm --filter "@orbb/worker..." build
 
   security:
     runs-on: ubuntu-latest
