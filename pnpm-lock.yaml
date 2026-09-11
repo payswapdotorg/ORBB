@@ -257,13 +257,23 @@ importers:
         version: 3.2.7(@types/node@22.20.2)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.9.0)
 
   packages/databox:
+    dependencies:
+      '@orbb/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@orbb/platform':
+        specifier: workspace:*
+        version: link:../platform
+      '@orbb/testkit':
+        specifier: workspace:*
+        version: link:../testkit
     devDependencies:
       '@eslint/js':
         specifier: ^9.30.0
         version: 9.39.5
-      '@orbb/domain':
-        specifier: workspace:*
-        version: link:../domain
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.2
       eslint:
         specifier: ^9.30.0
         version: 9.39.5(jiti@2.7.0)

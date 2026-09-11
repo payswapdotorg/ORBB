@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "DataBox boundary for ORBB: will own evidence/object abstractions and envelope encryption over the object plane. M0 boundary package — re-exports the evidence-plane types it will own.",
+  "description": "DataBox boundary for ORBB (architecture §6, §7): evidence upload-session orchestration over an injected ObjectStore, S3-compatible R2 object-store adapter with hand-rolled SigV4 presigning (shape-verified, not live-verified), and application-layer envelope encryption behind a KeyProvider interface (development SecretKeyProvider via node:crypto AES-256-GCM). No aws-sdk dependency by recorded decision.",
   "main": "./dist/index.js",
   "types": "./src/index.ts",
   "scripts": {
@@ -12,9 +12,14 @@
     "test": "vitest run",
     "build": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "@orbb/domain": "workspace:*",
+    "@orbb/platform": "workspace:*",
+    "@orbb/testkit": "workspace:*"
+  },
   "devDependencies": {
     "@eslint/js": "^9.30.0",
-    "@orbb/domain": "workspace:*",
+    "@types/node": "^22.0.0",
     "eslint": "^9.30.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.30.0",
