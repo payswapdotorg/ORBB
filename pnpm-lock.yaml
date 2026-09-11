@@ -292,6 +292,9 @@ importers:
       '@orbb/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@orbb/databox':
+        specifier: workspace:*
+        version: link:../databox
       '@orbb/domain':
         specifier: workspace:*
         version: link:../domain

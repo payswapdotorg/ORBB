@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Persistence boundary for ORBB (M2-A): Drizzle pg schema + additive migrations for the M0/M1 domain families, domain-shaped repositories with idempotency keys, cursor pagination, the transactional outbox (§4) Db facade, and the append-only access audit (A20). postgres.js driver for Neon Postgres; PGlite in-memory harness for tests.",
+  "description": "Persistence boundary for ORBB (M2-A + M2-D Lane A): Drizzle pg schema + additive migrations for the M0/M1 domain families, domain-shaped repositories with idempotency keys, cursor pagination, the transactional outbox (§4) Db facade, the append-only access audit (A20), and the db-backed EvidenceMetadataStore adapter for @orbb/databox's upload plane (M2-D: finalize + EVIDENCE_INGESTED outbox event in ONE transaction). postgres.js driver for Neon Postgres; PGlite in-memory harness for tests.",
   "main": "./dist/index.js",
   "types": "./src/index.ts",
   "scripts": {
@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@orbb/contracts": "workspace:*",
+    "@orbb/databox": "workspace:*",
     "@orbb/domain": "workspace:*",
     "drizzle-orm": "^0.44.7",
     "postgres": "^3.4.9"

@@ -1,0 +1,1717 @@
+{
+  "id": "7d208918-3a4f-40ef-af26-44cfc6a7f2b8",
+  "prevId": "ea3d95de-ebbf-4a33-b869-ddf2f9253b7e",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.access_audits": {
+      "name": "access_audits",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "decision_id": {
+          "name": "decision_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision": {
+          "name": "decision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor": {
+          "name": "actor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_digest": {
+          "name": "request_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_access_audits_subject_created": {
+          "name": "idx_access_audits_subject_created",
+          "columns": [
+            {
+              "expression": "subject_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "access_audits_subject_id_persons_id_fk": {
+          "name": "access_audits_subject_id_persons_id_fk",
+          "tableFrom": "access_audits",
+          "tableTo": "persons",
+          "columnsFrom": [
+            "subject_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "uq_access_audits_decision": {
+          "name": "uq_access_audits_decision",
+          "nullsNotDistinct": false,
+          "columns": [
+            "decision_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "access_audits_id_grammar": {
+          "name": "access_audits_id_grammar",
+          "value": "\"access_audits\".\"id\" ~ '^audit_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "access_audits_subject_id_grammar": {
+          "name": "access_audits_subject_id_grammar",
+          "value": "\"access_audits\".\"subject_id\" ~ '^prsn_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "access_audits_decision_vocabulary": {
+          "name": "access_audits_decision_vocabulary",
+          "value": "\"access_audits\".\"decision\" in ('ALLOW', 'DENY')"
+        },
+        "access_audits_decision_id_nonempty": {
+          "name": "access_audits_decision_id_nonempty",
+          "value": "\"access_audits\".\"decision_id\" <> ''"
+        },
+        "access_audits_actor_nonempty": {
+          "name": "access_audits_actor_nonempty",
+          "value": "\"access_audits\".\"actor\" <> ''"
+        },
+        "access_audits_request_digest_nonempty": {
+          "name": "access_audits_request_digest_nonempty",
+          "value": "\"access_audits\".\"request_digest\" <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.access_grants": {
+      "name": "access_grants",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recipient_id": {
+          "name": "recipient_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_access_grants_subject_recipient": {
+          "name": "idx_access_grants_subject_recipient",
+          "columns": [
+            {
+              "expression": "subject_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "recipient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_access_grants_subject_created": {
+          "name": "idx_access_grants_subject_created",
+          "columns": [
+            {
+              "expression": "subject_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "access_grants_subject_id_persons_id_fk": {
+          "name": "access_grants_subject_id_persons_id_fk",
+          "tableFrom": "access_grants",
+          "tableTo": "persons",
+          "columnsFrom": [
+            "subject_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "access_grants_id_grammar": {
+          "name": "access_grants_id_grammar",
+          "value": "\"access_grants\".\"id\" ~ '^grant_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "access_grants_subject_id_grammar": {
+          "name": "access_grants_subject_id_grammar",
+          "value": "\"access_grants\".\"subject_id\" ~ '^prsn_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "access_grants_state_vocabulary": {
+          "name": "access_grants_state_vocabulary",
+          "value": "\"access_grants\".\"state\" in ('active', 'revoked')"
+        },
+        "access_grants_recipient_nonempty": {
+          "name": "access_grants_recipient_nonempty",
+          "value": "\"access_grants\".\"recipient_id\" <> ''"
+        },
+        "access_grants_purpose_nonempty": {
+          "name": "access_grants_purpose_nonempty",
+          "value": "\"access_grants\".\"purpose\" <> ''"
+        },
+        "access_grants_scope_nonempty": {
+          "name": "access_grants_scope_nonempty",
+          "value": "array_length(\"access_grants\".\"scope\", 1) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.accounts": {
+      "name": "accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_accounts_person_created": {
+          "name": "idx_accounts_person_created",
+          "columns": [
+            {
+              "expression": "person_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "accounts_person_id_persons_id_fk": {
+          "name": "accounts_person_id_persons_id_fk",
+          "tableFrom": "accounts",
+          "tableTo": "persons",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "accounts_id_grammar": {
+          "name": "accounts_id_grammar",
+          "value": "\"accounts\".\"id\" ~ '^acct_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "accounts_person_id_grammar": {
+          "name": "accounts_person_id_grammar",
+          "value": "\"accounts\".\"person_id\" ~ '^prsn_[A-Za-z0-9_-]{16,128}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.evidence_objects": {
+      "name": "evidence_objects",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "object_key": {
+          "name": "object_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "media_type": {
+          "name": "media_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sha256": {
+          "name": "sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "captured_at": {
+          "name": "captured_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provenance_id": {
+          "name": "provenance_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "retention_class": {
+          "name": "retention_class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "encrypted_metadata": {
+          "name": "encrypted_metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "uq_evidence_objects_session": {
+          "name": "uq_evidence_objects_session",
+          "columns": [
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"evidence_objects\".\"session_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_evidence_objects_person_created": {
+          "name": "idx_evidence_objects_person_created",
+          "columns": [
+            {
+              "expression": "person_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_evidence_objects_sha256": {
+          "name": "idx_evidence_objects_sha256",
+          "columns": [
+            {
+              "expression": "sha256",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "evidence_objects_person_id_persons_id_fk": {
+          "name": "evidence_objects_person_id_persons_id_fk",
+          "tableFrom": "evidence_objects",
+          "tableTo": "persons",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "evidence_objects_provenance_id_provenances_id_fk": {
+          "name": "evidence_objects_provenance_id_provenances_id_fk",
+          "tableFrom": "evidence_objects",
+          "tableTo": "provenances",
+          "columnsFrom": [
+            "provenance_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "uq_evidence_objects_object_key": {
+          "name": "uq_evidence_objects_object_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "object_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "evidence_objects_id_grammar": {
+          "name": "evidence_objects_id_grammar",
+          "value": "\"evidence_objects\".\"id\" ~ '^evid_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "evidence_objects_person_id_grammar": {
+          "name": "evidence_objects_person_id_grammar",
+          "value": "\"evidence_objects\".\"person_id\" ~ '^prsn_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "evidence_objects_provenance_id_grammar": {
+          "name": "evidence_objects_provenance_id_grammar",
+          "value": "\"evidence_objects\".\"provenance_id\" ~ '^prov_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "evidence_objects_sha256_hex": {
+          "name": "evidence_objects_sha256_hex",
+          "value": "\"evidence_objects\".\"sha256\" ~ '^[0-9a-f]{64}$'"
+        },
+        "evidence_objects_size_nonnegative": {
+          "name": "evidence_objects_size_nonnegative",
+          "value": "\"evidence_objects\".\"size_bytes\" >= 0"
+        },
+        "evidence_objects_state_vocabulary": {
+          "name": "evidence_objects_state_vocabulary",
+          "value": "\"evidence_objects\".\"state\" in ('active')"
+        },
+        "evidence_objects_media_type_nonempty": {
+          "name": "evidence_objects_media_type_nonempty",
+          "value": "\"evidence_objects\".\"media_type\" <> ''"
+        },
+        "evidence_objects_object_key_nonempty": {
+          "name": "evidence_objects_object_key_nonempty",
+          "value": "\"evidence_objects\".\"object_key\" <> ''"
+        },
+        "evidence_objects_source_type_nonempty": {
+          "name": "evidence_objects_source_type_nonempty",
+          "value": "\"evidence_objects\".\"source_type\" <> ''"
+        },
+        "evidence_objects_retention_class_nonempty": {
+          "name": "evidence_objects_retention_class_nonempty",
+          "value": "\"evidence_objects\".\"retention_class\" <> ''"
+        },
+        "evidence_objects_session_id_grammar": {
+          "name": "evidence_objects_session_id_grammar",
+          "value": "\"evidence_objects\".\"session_id\" is null or \"evidence_objects\".\"session_id\" ~ '^usess_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "evidence_objects_encrypted_metadata_shape": {
+          "name": "evidence_objects_encrypted_metadata_shape",
+          "value": "\"evidence_objects\".\"encrypted_metadata\" is null or (jsonb_typeof(\"evidence_objects\".\"encrypted_metadata\") = 'object' and (\"evidence_objects\".\"encrypted_metadata\" ? 'algorithm') and (\"evidence_objects\".\"encrypted_metadata\" ? 'ciphertext') and (\"evidence_objects\".\"encrypted_metadata\" ? 'wrappedKey') and (\"evidence_objects\".\"encrypted_metadata\" ? 'iv') and (\"evidence_objects\".\"encrypted_metadata\" ? 'tag') and (\"evidence_objects\".\"encrypted_metadata\" ? 'context'))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.health_intents": {
+      "name": "health_intents",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "objective": {
+          "name": "objective",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence_pack_version": {
+          "name": "evidence_pack_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "plan_id": {
+          "name": "plan_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_health_intents_person_created": {
+          "name": "idx_health_intents_person_created",
+          "columns": [
+            {
+              "expression": "person_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "health_intents_person_id_persons_id_fk": {
+          "name": "health_intents_person_id_persons_id_fk",
+          "tableFrom": "health_intents",
+          "tableTo": "persons",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "health_intents_id_grammar": {
+          "name": "health_intents_id_grammar",
+          "value": "\"health_intents\".\"id\" ~ '^intent_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "health_intents_person_id_grammar": {
+          "name": "health_intents_person_id_grammar",
+          "value": "\"health_intents\".\"person_id\" ~ '^prsn_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "health_intents_plan_id_grammar": {
+          "name": "health_intents_plan_id_grammar",
+          "value": "\"health_intents\".\"plan_id\" ~ '^plan_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "health_intents_state_vocabulary": {
+          "name": "health_intents_state_vocabulary",
+          "value": "\"health_intents\".\"state\" in ('draft', 'active', 'paused', 'achieved', 'retired')"
+        },
+        "health_intents_objective_nonempty": {
+          "name": "health_intents_objective_nonempty",
+          "value": "\"health_intents\".\"objective\" <> ''"
+        },
+        "health_intents_evidence_pack_version_positive": {
+          "name": "health_intents_evidence_pack_version_positive",
+          "value": "\"health_intents\".\"evidence_pack_version\" is null or \"health_intents\".\"evidence_pack_version\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.idempotency_ledger": {
+      "name": "idempotency_ledger",
+      "schema": "",
+      "columns": {
+        "table_name": {
+          "name": "table_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operation": {
+          "name": "operation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "record_id": {
+          "name": "record_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "applied_at": {
+          "name": "applied_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "pk_idempotency_ledger": {
+          "name": "pk_idempotency_ledger",
+          "columns": [
+            "table_name",
+            "operation",
+            "idempotency_key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "idempotency_ledger_table_nonempty": {
+          "name": "idempotency_ledger_table_nonempty",
+          "value": "\"idempotency_ledger\".\"table_name\" <> ''"
+        },
+        "idempotency_ledger_operation_nonempty": {
+          "name": "idempotency_ledger_operation_nonempty",
+          "value": "\"idempotency_ledger\".\"operation\" <> ''"
+        },
+        "idempotency_ledger_key_nonempty": {
+          "name": "idempotency_ledger_key_nonempty",
+          "value": "\"idempotency_ledger\".\"idempotency_key\" <> ''"
+        },
+        "idempotency_ledger_record_nonempty": {
+          "name": "idempotency_ledger_record_nonempty",
+          "value": "\"idempotency_ledger\".\"record_id\" <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.measurement_plans": {
+      "name": "measurement_plans",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "intent_id": {
+          "name": "intent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metrics": {
+          "name": "metrics",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_measurement_plans_person_created": {
+          "name": "idx_measurement_plans_person_created",
+          "columns": [
+            {
+              "expression": "person_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_measurement_plans_intent": {
+          "name": "idx_measurement_plans_intent",
+          "columns": [
+            {
+              "expression": "intent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "measurement_plans_person_id_persons_id_fk": {
+          "name": "measurement_plans_person_id_persons_id_fk",
+          "tableFrom": "measurement_plans",
+          "tableTo": "persons",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "measurement_plans_intent_id_health_intents_id_fk": {
+          "name": "measurement_plans_intent_id_health_intents_id_fk",
+          "tableFrom": "measurement_plans",
+          "tableTo": "health_intents",
+          "columnsFrom": [
+            "intent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "measurement_plans_id_grammar": {
+          "name": "measurement_plans_id_grammar",
+          "value": "\"measurement_plans\".\"id\" ~ '^plan_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "measurement_plans_person_id_grammar": {
+          "name": "measurement_plans_person_id_grammar",
+          "value": "\"measurement_plans\".\"person_id\" ~ '^prsn_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "measurement_plans_intent_id_grammar": {
+          "name": "measurement_plans_intent_id_grammar",
+          "value": "\"measurement_plans\".\"intent_id\" ~ '^intent_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "measurement_plans_state_vocabulary": {
+          "name": "measurement_plans_state_vocabulary",
+          "value": "\"measurement_plans\".\"state\" in ('draft', 'published', 'active', 'completed', 'cancelled')"
+        },
+        "measurement_plans_metrics_nonempty": {
+          "name": "measurement_plans_metrics_nonempty",
+          "value": "array_length(\"measurement_plans\".\"metrics\", 1) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.observations": {
+      "name": "observations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "concept_code": {
+          "name": "concept_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "effective_at": {
+          "name": "effective_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "observed_at": {
+          "name": "observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "method_id": {
+          "name": "method_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence_id": {
+          "name": "evidence_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quality": {
+          "name": "quality",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "validation_state": {
+          "name": "validation_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provenance_id": {
+          "name": "provenance_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence_label": {
+          "name": "evidence_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "supersedes_id": {
+          "name": "supersedes_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_observations_person_created": {
+          "name": "idx_observations_person_created",
+          "columns": [
+            {
+              "expression": "person_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_observations_person_concept": {
+          "name": "idx_observations_person_concept",
+          "columns": [
+            {
+              "expression": "person_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "concept_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "observations_person_id_persons_id_fk": {
+          "name": "observations_person_id_persons_id_fk",
+          "tableFrom": "observations",
+          "tableTo": "persons",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "observations_evidence_id_evidence_objects_id_fk": {
+          "name": "observations_evidence_id_evidence_objects_id_fk",
+          "tableFrom": "observations",
+          "tableTo": "evidence_objects",
+          "columnsFrom": [
+            "evidence_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "observations_provenance_id_provenances_id_fk": {
+          "name": "observations_provenance_id_provenances_id_fk",
+          "tableFrom": "observations",
+          "tableTo": "provenances",
+          "columnsFrom": [
+            "provenance_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "observations_supersedes_id_observations_id_fk": {
+          "name": "observations_supersedes_id_observations_id_fk",
+          "tableFrom": "observations",
+          "tableTo": "observations",
+          "columnsFrom": [
+            "supersedes_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "uq_observations_supersedes": {
+          "name": "uq_observations_supersedes",
+          "nullsNotDistinct": false,
+          "columns": [
+            "supersedes_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "observations_id_grammar": {
+          "name": "observations_id_grammar",
+          "value": "\"observations\".\"id\" ~ '^obs_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "observations_person_id_grammar": {
+          "name": "observations_person_id_grammar",
+          "value": "\"observations\".\"person_id\" ~ '^prsn_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "observations_source_id_grammar": {
+          "name": "observations_source_id_grammar",
+          "value": "\"observations\".\"source_id\" ~ '^src_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "observations_provenance_id_grammar": {
+          "name": "observations_provenance_id_grammar",
+          "value": "\"observations\".\"provenance_id\" ~ '^prov_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "observations_supersedes_id_grammar": {
+          "name": "observations_supersedes_id_grammar",
+          "value": "\"observations\".\"supersedes_id\" ~ '^obs_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "observations_evidence_id_grammar": {
+          "name": "observations_evidence_id_grammar",
+          "value": "\"observations\".\"evidence_id\" ~ '^evid_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "observations_validation_state_vocabulary": {
+          "name": "observations_validation_state_vocabulary",
+          "value": "\"observations\".\"validation_state\" in ('pending', 'validated', 'rejected', 'superseded')"
+        },
+        "observations_evidence_label_vocabulary": {
+          "name": "observations_evidence_label_vocabulary",
+          "value": "\"observations\".\"evidence_label\" in ('MEASURED', 'ESTIMATED', 'IMPORTED', 'DERIVED')"
+        },
+        "observations_value_json_type": {
+          "name": "observations_value_json_type",
+          "value": "jsonb_typeof(\"observations\".\"value\") = 'object' and (\"observations\".\"value\" ? 'v') and jsonb_typeof(\"observations\".\"value\"->'v') in ('string', 'number', 'boolean')"
+        },
+        "observations_quality_range": {
+          "name": "observations_quality_range",
+          "value": "\"observations\".\"quality\" is null or (\"observations\".\"quality\" >= 0 and \"observations\".\"quality\" <= 1)"
+        },
+        "observations_concept_code_nonempty": {
+          "name": "observations_concept_code_nonempty",
+          "value": "\"observations\".\"concept_code\" <> ''"
+        },
+        "observations_method_id_nonempty": {
+          "name": "observations_method_id_nonempty",
+          "value": "\"observations\".\"method_id\" <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.outbox": {
+      "name": "outbox",
+      "schema": "",
+      "columns": {
+        "event_id": {
+          "name": "event_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_outbox_status_created": {
+          "name": "idx_outbox_status_created",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "outbox_event_id_grammar": {
+          "name": "outbox_event_id_grammar",
+          "value": "\"outbox\".\"event_id\" ~ '^evt_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "outbox_event_type_vocabulary": {
+          "name": "outbox_event_type_vocabulary",
+          "value": "\"outbox\".\"event_type\" in ('INTENT_CREATED', 'PLAN_PUBLISHED', 'TASK_DUE', 'OBSERVATION_RECORDED', 'OBSERVATION_SUPERSEDED', 'EVIDENCE_INGESTED', 'ACCESS_GRANTED', 'ACCESS_REVOKED', 'ACCESS_EVALUATED', 'SERVICE_ORDER_CREATED', 'SERVICE_ORDER_FULFILLED', 'EXTENSION_INSTALLED', 'STUDY_ENROLLED', 'SAFETY_FLAG_RAISED')"
+        },
+        "outbox_status_vocabulary": {
+          "name": "outbox_status_vocabulary",
+          "value": "\"outbox\".\"status\" in ('pending', 'published', 'failed')"
+        },
+        "outbox_payload_nonempty": {
+          "name": "outbox_payload_nonempty",
+          "value": "\"outbox\".\"payload\" <> ''"
+        },
+        "outbox_attempts_nonnegative": {
+          "name": "outbox_attempts_nonnegative",
+          "value": "\"outbox\".\"attempts\" >= 0"
+        },
+        "outbox_last_error_nonempty": {
+          "name": "outbox_last_error_nonempty",
+          "value": "\"outbox\".\"last_error\" is null or \"outbox\".\"last_error\" <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.persons": {
+      "name": "persons",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "persons_id_grammar": {
+          "name": "persons_id_grammar",
+          "value": "\"persons\".\"id\" ~ '^prsn_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "persons_display_name_nonempty": {
+          "name": "persons_display_name_nonempty",
+          "value": "\"persons\".\"display_name\" <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.provenances": {
+      "name": "provenances",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "actor": {
+          "name": "actor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject": {
+          "name": "subject",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "causation_id": {
+          "name": "causation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "correlation_id": {
+          "name": "correlation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_provenances_subject_created": {
+          "name": "idx_provenances_subject_created",
+          "columns": [
+            {
+              "expression": "subject",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "provenances_subject_persons_id_fk": {
+          "name": "provenances_subject_persons_id_fk",
+          "tableFrom": "provenances",
+          "tableTo": "persons",
+          "columnsFrom": [
+            "subject"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "provenances_id_grammar": {
+          "name": "provenances_id_grammar",
+          "value": "\"provenances\".\"id\" ~ '^prov_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "provenances_actor_grammar": {
+          "name": "provenances_actor_grammar",
+          "value": "\"provenances\".\"actor\" ~ '^(prsn|dev|src)_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "provenances_subject_grammar": {
+          "name": "provenances_subject_grammar",
+          "value": "\"provenances\".\"subject\" ~ '^prsn_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "provenances_causation_nonempty": {
+          "name": "provenances_causation_nonempty",
+          "value": "\"provenances\".\"causation_id\" is null or \"provenances\".\"causation_id\" <> ''"
+        },
+        "provenances_correlation_nonempty": {
+          "name": "provenances_correlation_nonempty",
+          "value": "\"provenances\".\"correlation_id\" is null or \"provenances\".\"correlation_id\" <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.upload_sessions": {
+      "name": "upload_sessions",
+      "schema": "",
+      "columns": {
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "evidence_id": {
+          "name": "evidence_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "object_key": {
+          "name": "object_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "media_type": {
+          "name": "media_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "declared_sha256": {
+          "name": "declared_sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "declared_size_bytes": {
+          "name": "declared_size_bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "finalized_at": {
+          "name": "finalized_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_upload_sessions_person_created": {
+          "name": "idx_upload_sessions_person_created",
+          "columns": [
+            {
+              "expression": "person_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_upload_sessions_state_expires": {
+          "name": "idx_upload_sessions_state_expires",
+          "columns": [
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "upload_sessions_person_id_persons_id_fk": {
+          "name": "upload_sessions_person_id_persons_id_fk",
+          "tableFrom": "upload_sessions",
+          "tableTo": "persons",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "uq_upload_sessions_evidence": {
+          "name": "uq_upload_sessions_evidence",
+          "nullsNotDistinct": false,
+          "columns": [
+            "evidence_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "upload_sessions_session_id_grammar": {
+          "name": "upload_sessions_session_id_grammar",
+          "value": "\"upload_sessions\".\"session_id\" ~ '^usess_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "upload_sessions_evidence_id_grammar": {
+          "name": "upload_sessions_evidence_id_grammar",
+          "value": "\"upload_sessions\".\"evidence_id\" ~ '^evid_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "upload_sessions_person_id_grammar": {
+          "name": "upload_sessions_person_id_grammar",
+          "value": "\"upload_sessions\".\"person_id\" ~ '^prsn_[A-Za-z0-9_-]{16,128}$'"
+        },
+        "upload_sessions_state_vocabulary": {
+          "name": "upload_sessions_state_vocabulary",
+          "value": "\"upload_sessions\".\"state\" in ('open', 'finalized')"
+        },
+        "upload_sessions_declared_sha256_hex": {
+          "name": "upload_sessions_declared_sha256_hex",
+          "value": "\"upload_sessions\".\"declared_sha256\" ~ '^[0-9a-f]{64}$'"
+        },
+        "upload_sessions_declared_size_nonnegative": {
+          "name": "upload_sessions_declared_size_nonnegative",
+          "value": "\"upload_sessions\".\"declared_size_bytes\" >= 0"
+        },
+        "upload_sessions_object_key_nonempty": {
+          "name": "upload_sessions_object_key_nonempty",
+          "value": "\"upload_sessions\".\"object_key\" <> ''"
+        },
+        "upload_sessions_media_type_nonempty": {
+          "name": "upload_sessions_media_type_nonempty",
+          "value": "\"upload_sessions\".\"media_type\" <> ''"
+        },
+        "upload_sessions_purpose_nonempty": {
+          "name": "upload_sessions_purpose_nonempty",
+          "value": "\"upload_sessions\".\"purpose\" <> ''"
+        },
+        "upload_sessions_scope_nonempty": {
+          "name": "upload_sessions_scope_nonempty",
+          "value": "array_length(\"upload_sessions\".\"scope\", 1) > 0"
+        },
+        "upload_sessions_finalized_at_present": {
+          "name": "upload_sessions_finalized_at_present",
+          "value": "\"upload_sessions\".\"state\" <> 'finalized' or \"upload_sessions\".\"finalized_at\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

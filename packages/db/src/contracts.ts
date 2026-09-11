@@ -51,8 +51,20 @@ import {
 } from "@orbb/domain";
 import type { DomainEventType, EventId, OutboxRecord } from "@orbb/contracts";
 import { isEventId, isDomainEventType } from "@orbb/contracts";
+import { assertEnvelopeShape, isUploadSessionId } from "@orbb/databox";
+import type { EncryptedEnvelope, UploadSessionId, UploadSessionRecord, UploadSessionState } from "@orbb/databox";
 import { PersistenceError } from "./errors.js";
 import type { CursorPage, CursorPageResult } from "./cursor.js";
+
+// ---------------------------------------------------------------------------
+// Upload-plane session types (M2-D). The RECORD is the frozen
+// @orbb/databox `UploadSessionRecord` (used DIRECTLY, exactly like the
+// domain aggregates below — the upstream interface owns the shape, so
+// the persistence surface can never drift from it). Re-exported here so
+// the repository surface is self-documenting.
+// ---------------------------------------------------------------------------
+
+export type { UploadSessionId, UploadSessionRecord, UploadSessionState } from "@orbb/databox";
 
 // ---------------------------------------------------------------------------
 // Local opaque id grammars (persistence-owned).
@@ -167,9 +179,17 @@ export interface AccountRecord {
  * provenanceId, retentionClass`) plus the operational columns needed for
  * §6 integrity (`sizeBytes`, `state`).
  *
- * Recorded handoff: M2-C's upload-plane fields (`sessionId`,
- * `encryptedMetadata`) land in a later additive migration together with
- * the db-backed `EvidenceMetadataStore` integration (expand/contract).
+ * M2-D (Lane A) upload-plane extensions (the additive landing of the
+ * recorded M2-A handoff; all optional — legacy rows and non-upload
+ * ingestion paths carry none of them):
+ *   - `createdAt` — surfaced for read paths; when present on insert it is
+ *     stored verbatim (the intent/plan convention — the upstream record
+ *     owns its creation time), otherwise the persistence layer stamps it
+ *     from its clock (M2-A behavior).
+ *   - `sessionId` — the upload session that produced this object
+ *     (unique when present: one finalized EvidenceObject per session).
+ *   - `encryptedMetadata` — the envelope-encrypted sensitive metadata
+ *     (capturedAt/purpose/scope live ONLY inside this envelope).
  */
 export interface EvidenceObjectRecord {
   readonly id: EvidenceId;
@@ -184,6 +204,12 @@ export interface EvidenceObjectRecord {
   readonly provenanceId: ProvenanceId;
   readonly retentionClass: string;
   readonly state: EvidenceObjectState;
+  /** EvidenceObject creation time (see interface docs; optional). */
+  readonly createdAt?: Date;
+  /** The upload session that produced this object (optional). */
+  readonly sessionId?: UploadSessionId;
+  /** Envelope-encrypted sensitive metadata (optional). */
+  readonly encryptedMetadata?: EncryptedEnvelope;
 }
 
 /** EvidenceObject lifecycle state (M2-A: only "active"; expand-safe). */
@@ -298,6 +324,19 @@ export function assertEvidenceObjectRecord(
   }
   if (candidate.state !== "active") {
     throw invalid("evidence object record: expected the state 'active'");
+  }
+  if (candidate.createdAt !== undefined && !isTimestamp(candidate.createdAt)) {
+    throw invalid("evidence object record: expected a valid createdAt timestamp when present");
+  }
+  if (candidate.sessionId !== undefined && !isUploadSessionId(candidate.sessionId)) {
+    throw invalid("evidence object record: expected a canonical usess_ session id when present");
+  }
+  if (candidate.encryptedMetadata !== undefined) {
+    try {
+      assertEnvelopeShape(candidate.encryptedMetadata as EncryptedEnvelope);
+    } catch {
+      throw invalid("evidence object record: expected a well-formed envelope when present");
+    }
   }
 }
 
@@ -436,6 +475,104 @@ export interface EvidenceObjectRepository {
   ): Promise<CursorPageResult<EvidenceObjectRecord>>;
 }
 
+/** Pure guard: asserts a well-formed {@link UploadSessionRecord}. */
+export function assertUploadSessionRecord(
+  candidate: unknown,
+): asserts candidate is UploadSessionRecord {
+  if (!isPlainObject(candidate)) {
+    throw invalid("upload session record");
+  }
+  if (!isUploadSessionId(candidate.sessionId)) {
+    throw invalid("upload session record: expected a canonical usess_ session id");
+  }
+  if (!isEvidenceId(candidate.evidenceId)) {
+    throw invalid("upload session record: expected a canonical evid_ evidence id");
+  }
+  if (!isPersonId(candidate.personId)) {
+    throw invalid("upload session record: expected a canonical prsn_ person id");
+  }
+  if (!isNonEmptyString(candidate.objectKey) || candidate.objectKey.length > 512) {
+    throw invalid("upload session record: expected an object key of 1-512 characters");
+  }
+  if (!isNonEmptyString(candidate.mediaType) || candidate.mediaType.length > 255) {
+    throw invalid("upload session record: expected a media type of 1-255 characters");
+  }
+  if (!isSha256Hex(candidate.declaredSha256)) {
+    throw invalid("upload session record: expected a 64-character lowercase hexadecimal sha256");
+  }
+  if (
+    typeof candidate.declaredSizeBytes !== "number" ||
+    !Number.isInteger(candidate.declaredSizeBytes) ||
+    candidate.declaredSizeBytes < 0 ||
+    candidate.declaredSizeBytes > Number.MAX_SAFE_INTEGER
+  ) {
+    throw invalid("upload session record: expected a non-negative integer size in bytes");
+  }
+  if (!isNonEmptyString(candidate.purpose) || candidate.purpose.length > 256) {
+    throw invalid("upload session record: expected a purpose of 1-256 characters");
+  }
+  if (
+    !Array.isArray(candidate.scope) ||
+    candidate.scope.length === 0 ||
+    candidate.scope.some(
+      (token) => typeof token !== "string" || token.length === 0 || token.length > 256,
+    )
+  ) {
+    throw invalid("upload session record: expected a non-empty list of non-empty scope tokens");
+  }
+  if (!isTimestamp(candidate.createdAt)) {
+    throw invalid("upload session record: expected a valid createdAt timestamp");
+  }
+  if (!isTimestamp(candidate.expiresAt)) {
+    throw invalid("upload session record: expected a valid expiresAt timestamp");
+  }
+  if (candidate.state !== "open" && candidate.state !== "finalized") {
+    throw invalid("upload session record: expected the state 'open' or 'finalized'");
+  }
+  if (candidate.finalizedAt !== undefined && !isTimestamp(candidate.finalizedAt)) {
+    throw invalid("upload session record: expected a valid finalizedAt timestamp when present");
+  }
+  if (candidate.state === "finalized" && candidate.finalizedAt === undefined) {
+    throw invalid("upload session record: expected finalizedAt when the state is 'finalized'");
+  }
+  if (candidate.state === "open" && candidate.finalizedAt !== undefined) {
+    throw invalid("upload session record: did not expect finalizedAt while the state is 'open'");
+  }
+}
+
+/**
+ * Options for {@link UploadSessionRepository.markFinalized}: the guarded
+ * open → finalized transition (the only transition the §6 flow defines)
+ * plus the finalization instant stamped onto `finalized_at`.
+ */
+export interface FinalizeSessionOptions extends TransitionOptions<UploadSessionState> {
+  /** Finalization instant (= EvidenceObject creation time, §6 step 6). */
+  readonly finalizedAt: Date;
+}
+
+/**
+ * M2-D (Lane A) — upload-session repository over `upload_sessions`.
+ * The record type is the frozen @orbb/databox `UploadSessionRecord`
+ * (create-before-publication semantics; the session fixes its
+ * EvidenceObject id at creation).
+ */
+export interface UploadSessionRepository {
+  /** Persists a newly created session record (state "open"). */
+  insert(session: UploadSessionRecord, options: MutationOptions): Promise<UploadSessionRecord>;
+  findById(sessionId: UploadSessionId): Promise<UploadSessionRecord | undefined>;
+  /** A person's sessions, newest-first, cursor-paginated. */
+  listByPerson(
+    personId: PersonId,
+    page?: CursorPage,
+  ): Promise<CursorPageResult<UploadSessionRecord>>;
+  /**
+   * Guarded open → finalized transition (compare-and-set on "open"),
+   * stamping `finalized_at`. Converged retries (already finalized)
+   * return the stored record; a missing session is "not-found".
+   */
+  markFinalized(sessionId: UploadSessionId, options: FinalizeSessionOptions): Promise<UploadSessionRecord>;
+}
+
 export interface MeasurementPlanRepository {
   insert(plan: MeasurementPlan, options: MutationOptions): Promise<MeasurementPlan>;
   findById(id: PlanId): Promise<MeasurementPlan | undefined>;
@@ -522,6 +659,7 @@ export interface Db {
   readonly intents: HealthIntentRepository;
   readonly observations: ObservationRepository;
   readonly evidence: EvidenceObjectRepository;
+  readonly uploadSessions: UploadSessionRepository;
   readonly plans: MeasurementPlanRepository;
   readonly grants: AccessGrantRepository;
   readonly audits: AccessAuditRepository;
@@ -544,6 +682,7 @@ export interface UnitOfWork {
   readonly intents: HealthIntentRepository;
   readonly observations: ObservationRepository;
   readonly evidence: EvidenceObjectRepository;
+  readonly uploadSessions: UploadSessionRepository;
   readonly plans: MeasurementPlanRepository;
   readonly grants: AccessGrantRepository;
   readonly audits: AccessAuditRepository;
