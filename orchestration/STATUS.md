@@ -1,10 +1,10 @@
 # ORBB Orchestration Status
 
-current_milestone: M3 — API + identity (DISPATCHING: m3-a/m3-b/m3-c packets)
+current_milestone: M3 — API + identity (2/3 landed; M3-B in usage-limit cooldown)
 architecture_status: FROZEN FOR IMPLEMENTATION
-implementation_status: M0 + M1 + M2 COMPLETE — PRs #4-#12 merged, all exit criteria verified on fresh main
-active_worker_slots: 0/3 (M2-D merged; M3 packets dispatching)
-latest_green_commit: 1eca964 (Merge PR #12: M2-D db-backed upload store + M2 exit journey)
+implementation_status: M0 + M1 + M2 COMPLETE; M3-A + M3-C MERGED (PRs #13/#14)
+active_worker_slots: 0/3 (m3-b queued, hard-frozen per lesson 16 after usage-limit detection)
+latest_green_commit: fd02c96 (Merge PR #14: M3-A API surface)
 preview_url: none (Vercel preview pending operator account link; web shell dogfooded locally by lead)
 last_dogfood: 2026-09-10 18:5x UTC — lead exercised the web shell end-to-end (role switch, emphasis, DataBox journey; VLM-verified screenshots)
 last_audit: 2026-09-10 — session audit by resident tech lead
@@ -37,9 +37,14 @@ merged_in_M2:
 - M2 EXIT verified on fresh main 1eca964: frozen install 0, lint 16/16, typecheck 16/16, test 785 passed | 3 DATABASE_URL-gated skips, build 14/14; journey.test.ts explicitly green (upload -> finalize -> retrieval -> audit end-to-end with synthetic data — the M2 exit criterion). Transit note: migration SQL arrived chat-mangled (smart primes/zero-width/identifier reflow); repaired at the integration station against schema.ts ground truth — all 9 drift guards green, PGlite executes the real SQL in every db test.
 
 in_flight:
-- none (M3 packets dispatching now: m3-a-api, m3-b-webshell, m3-c-identity)
+- M3-B (Lane B, /c/031d9c66): web shell DataBox journey on the design system — queued; account hit personal usage limit after M3-A/M3-C back-to-back packets (generation errors 'No response, Please try again later'); HARD FREEZE in effect (watcher suspended, no probes) until ~12:45 UTC, then one fresh probe.
+
+merged_in_M3:
+- M3-C (PR #13, Lane C): @orbb/auth — SessionService (opaque hashed tokens, atomic rotate), dependency-free WebAuthn (hand-written CBOR, ES256/Ed25519/RS256, none+packed attestation, signCount clone detection), email OTP (single-use/TTL/throttle), recovery codes (hashed, timingSafeEqual), Upstash REST rate-limit adapter (SHAPE-VERIFIED via fetch stub, fail-closed, parity-tested vs in-memory), AccountService seams; zero external runtime deps; 147 tests; lockfile +16/-3.
+- M3-A (PR #14, Lane A): apps/api /v1 router — error envelope {code,message,details?,requestId}, principal middleware seam, person-scoped resources (intents/observations/evidence; cursor pagination; cross-person 404 existence secrecy), A24 idempotency middleware (replay returns original response, concurrent duplicate 409), A26 OpenAPI 3.1 (SYNTH-only examples); wrangler dry-run 117.73 KiB driver-free bundle; 85 tests; lockfile +19/-3. CI fix included: workers-job dry-runs use dependency-inclusive pnpm filter ('@orbb/api...') so @orbb/domain dist exists before wrangler bundles (fresh-checkout resolution failure root-caused and fixed at the integration station).
+- Combined state on rebased branch: 1015 passed | 3 gated skips.
 
 next_dispatch:
-- M3 (A21 router/errors + A24 idempotency middleware + A26 OpenAPI; A22/A25 identity core with passkeys/email OTP + rate limits; Lane B web shell mounting the DataBox journey on the design system).
+- M3-B re-probe after cooldown (single fresh dispatch if the queued session is dead), then M3 exit check (authenticated user can create/retrieve their own intent/evidence/observations; another user cannot), then M4 (measurement engine) packets.
 
 Do not mark this file green until actual code, tests, and preview verification exist.
