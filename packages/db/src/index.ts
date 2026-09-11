@@ -1,14 +1,22 @@
 /**
- * @orbb/db — persistence boundary package (M0).
+ * @orbb/db — persistence boundary package (M2-A).
  *
- * Future responsibility (architecture §2, §4): owns the Drizzle schema,
- * migrations, and repositories over the structured health ledger, plus
- * the transactional outbox tables. Every domain mutation will run inside
- * a transaction that writes domain state and an outbox event together.
- *
- * M0 contract handoff: this package re-exports nothing yet. When
- * persistence lands, it will consume `@orbb/domain` and
- * `@orbb/contracts` types (OutboxRecord in particular) and must never
- * leak provider SDK types (Neon/Drizzle) upward.
+ * Public surface (provider SDK types — Drizzle/Neon/postgres.js — never
+ * leak through this index; they stay behind the `Db` facade):
+ *   - the Drizzle pg schema lives in `schema.ts` (internal; consumed by
+ *     drizzle-kit and the repository layer);
+ *   - typed, domain-shaped `*Repository` interfaces + record types
+ *     (`contracts.ts`);
+ *   - the `Db` unit-of-work facade with the transactional outbox (§4)
+ *     and `createDb` / `applyMigrations` (`db.ts`);
+ *   - pure cursor pagination helpers (`cursor.ts`);
+ *   - the persistence error taxonomy (`errors.ts`);
+ *   - `testing.ts` (PGlite harness) is deliberately NOT exported here —
+ *     PGlite is a devDependency; import it relatively from within this
+ *     package's tests.
  */
-export {};
+export * from "./errors.js";
+export * from "./cursor.js";
+export * from "./contracts.js";
+export { createDb, applyMigrations, SystemClock, DrizzleDb, type DbOptions } from "./db.js";
+export type { Db, UnitOfWork } from "./contracts.js";

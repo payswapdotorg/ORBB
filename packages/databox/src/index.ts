@@ -15,6 +15,9 @@
  *   - In-memory reference implementations for tests and local harnesses
  *     (ObjectStore, metadata store, event/task sinks, static guard,
  *     synthetic presigner).
+ *   - A18 evidence checksum/metadata validation (`verify.ts`) — pure
+ *     guards used by (and aligned with) the §6 upload flow's
+ *     verification step.
  *
  * Runtime dependencies: @orbb/domain, @orbb/platform, @orbb/testkit
  * (workspace:*) + node:crypto (builtin) — deliberately NO aws-sdk
@@ -26,6 +29,7 @@ export type { EvidenceId, EvidenceLabel, SourceId } from "@orbb/domain";
 export * from "./errors.js";
 export * from "./objectkeys.js";
 export * from "./checksum.js";
+export * from "./verify.js";
 export * from "./crypto/keyprovider.js";
 export * from "./crypto/envelope.js";
 export * from "./sigv4.js";
