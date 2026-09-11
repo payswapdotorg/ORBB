@@ -1,10 +1,10 @@
 # ORBB Orchestration Status
 
-current_milestone: M2 — persistence/DataBox (IN PROGRESS: m2-a + m2-c dispatched)
+current_milestone: M3 — API + identity (DISPATCHING: m3-a/m3-b/m3-c packets)
 architecture_status: FROZEN FOR IMPLEMENTATION
-implementation_status: M0 + M1 COMPLETE — all six packets merged (PRs #4-#9), exit criteria verified
-active_worker_slots: 0/3 (M2-A + M2-C merged; M2-D integration packet dispatching for exit criterion)
-latest_green_commit: 43249bb (Merge PR #11: M2-A persistence core — schema/repos/outbox/audit)
+implementation_status: M0 + M1 + M2 COMPLETE — PRs #4-#12 merged, all exit criteria verified on fresh main
+active_worker_slots: 0/3 (M2-D merged; M3 packets dispatching)
+latest_green_commit: 1eca964 (Merge PR #12: M2-D db-backed upload store + M2 exit journey)
 preview_url: none (Vercel preview pending operator account link; web shell dogfooded locally by lead)
 last_dogfood: 2026-09-10 18:5x UTC — lead exercised the web shell end-to-end (role switch, emphasis, DataBox journey; VLM-verified screenshots)
 last_audit: 2026-09-10 — session audit by resident tech lead
@@ -30,10 +30,16 @@ merged_in_M1:
 - M2-A (PR #11, Lane A): @orbb/db real content — 11-table Drizzle schema (opaque domain ids as PKs, id-grammar CHECKs, frozen vocabularies), additive migrations (append-only trigger on access_audits), 9 repos + UnitOfWork transactional outbox, idempotency ledger, pure cursor pagination; PGlite harness executes real migration SQL; 104 db tests + 19 databox (A18) tests; workspace 767 passed. Gitleaks false-positive on a synthetic fixture resolved by branch squash (string never in history; scanner at full sensitivity).
 - M1 EXIT verified on fresh main a56bee4: frozen install 0, lint 16/16, typecheck 16/16, test 16/16 (530 tests), build 14/14; domain 162 tests cover ALL state machines' legal grammars + illegal transitions + terminal states + self-loops (intent/plan/observation+supersession/grant/access audited by name).
 
+merged_in_M2:
+- M2-C (PR #10, Lane C): @orbb/databox — R2ObjectStore (hand-rolled SigV4), EnvelopeEncryptor (HKDF+AES-256-GCM), UploadSessionService (§6 flow); 115 tests.
+- M2-A (PR #11, Lane A): @orbb/db — 11-table Drizzle schema, additive migrations, 9 repos + UnitOfWork transactional outbox, idempotency ledger, cursor pagination, append-only access audits; PGlite executes real migration SQL; 104 db tests.
+- M2-D (PR #12, Lane A): EvidenceMetadataStoreDb adapter — finalizeEvidence commits session-finalize + evidence upsert + EVIDENCE_INGESTED outbox row in ONE Db.transaction() (post-commit event gap CLOSED; regression guard proves recoverability via listPending -> markPublished); upload_sessions migration 0002 (grammar CHECKs, frozen vocabulary, FK); E2E synthetic journey (real UploadSessionService + PGlite + in-memory ObjectStore + EnvelopeEncryptor) with 3 regression guards; deterministic derived ids (domain-separated SHA-256) for crash-retry idempotency; @orbb/db 122 tests; lockfile +3 (db -> databox importer).
+- M2 EXIT verified on fresh main 1eca964: frozen install 0, lint 16/16, typecheck 16/16, test 785 passed | 3 DATABASE_URL-gated skips, build 14/14; journey.test.ts explicitly green (upload -> finalize -> retrieval -> audit end-to-end with synthetic data — the M2 exit criterion). Transit note: migration SQL arrived chat-mangled (smart primes/zero-width/identifier reflow); repaired at the integration station against schema.ts ground truth — all 9 drift guards green, PGlite executes the real SQL in every db test.
+
 in_flight:
-- M2-D (Lane A): db-backed EvidenceMetadataStore adapter + E2E synthetic journey (upload -> finalize -> retrieval -> audit) + outbox closing the post-commit event gap — the M2 exit-criterion packet (handoffs from M2-C + M2-A reports).
+- none (M3 packets dispatching now: m3-a-api, m3-b-webshell, m3-c-identity)
 
 next_dispatch:
-- After M2-D: M2 exit check (E2E journey green), then M3 (API + identity) packets: router/errors, auth/session, person/account management, evidence+observation endpoints.
+- M3 (A21 router/errors + A24 idempotency middleware + A26 OpenAPI; A22/A25 identity core with passkeys/email OTP + rate limits; Lane B web shell mounting the DataBox journey on the design system).
 
 Do not mark this file green until actual code, tests, and preview verification exist.
