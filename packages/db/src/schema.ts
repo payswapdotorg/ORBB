@@ -51,6 +51,20 @@
  *   - `access_audits` is append-only at THREE levels: the repository
  *     surface exposes no update/delete, a database trigger (migration
  *     0001) rejects UPDATE/DELETE/TRUNCATE, and no cascade path exists.
+ *   - M2-D (Lane A): `upload_sessions` mirrors @orbb/databox's frozen
+ *     `UploadSessionRecord` field-for-field (create-before-publication;
+ *     `evidence_id` is UNIQUE — a session fixes its EvidenceObject id at
+ *     creation, so the session↔evidence mapping is one-to-one by
+ *     construction). `evidence_objects` gains the M2-C upload-plane
+ *     columns recorded as the M2-A handoff: `session_id` (nullable, and
+ *     UNIQUE when present via a partial index — legacy rows and non-
+ *     upload ingestion paths carry none) and `encrypted_metadata`
+ *     (nullable jsonb holding the base64-serialized envelope; see
+ *     `evidence-envelope.ts`). The session's `purpose`/`scope` are
+ *     stored as defined by the frozen databox interface (pre-publication
+ *     session state); on the FINALIZED EvidenceObject they exist only
+ *     inside the envelope (M2-C recorded decision — "record what you
+ *     encrypt").
  */
 import {
   EVIDENCE_LABELS,
@@ -73,6 +87,7 @@ import {
   type ProvenanceId,
   type SourceId,
 } from "@orbb/domain";
+import type { UploadSessionId, UploadSessionState } from "@orbb/databox";
 import { DOMAIN_EVENT_TYPES, OUTBOX_STATUSES, type DomainEventType, type EventId, type OutboxStatus } from "@orbb/contracts";
 import { sql } from "drizzle-orm";
 import {
@@ -87,9 +102,20 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import type { StoredEncryptedEnvelope } from "./evidence-envelope.js";
 import type { AccountId, AuditId } from "./contracts.js";
+
+// ---------------------------------------------------------------------------
+// Upload-session lifecycle vocabulary (M2-D). Pinned against the frozen
+// @orbb/databox `UploadSessionState` union so the SQL CHECK and the
+// interface can never drift (a unit test re-asserts the generated SQL).
+// ---------------------------------------------------------------------------
+
+/** Lifecycle states of an upload session (mirrors @orbb/databox). */
+export const UPLOAD_SESSION_STATES = ["open", "finalized"] as const satisfies readonly UploadSessionState[];
 
 // ---------------------------------------------------------------------------
 // Check-constraint builders.
@@ -224,6 +250,10 @@ export const evidenceObjects = pgTable("evidence_objects", {
   retentionClass: text("retention_class").notNull(),
   state: text("state").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull(),
+  // M2-D (Lane A) upload-plane columns — nullable: legacy rows and
+  // non-upload ingestion paths carry neither.
+  sessionId: text("session_id").$type<UploadSessionId>(),
+  encryptedMetadata: jsonb("encrypted_metadata").$type<StoredEncryptedEnvelope>(),
 }, (t) => [
   idGrammarCheck("evidence_objects", "id", "evid"),
   idGrammarCheck("evidence_objects", "person_id", "prsn"),
@@ -235,9 +265,71 @@ export const evidenceObjects = pgTable("evidence_objects", {
   rawCheck("evidence_objects_object_key_nonempty", `"evidence_objects"."object_key" <> ''`),
   rawCheck("evidence_objects_source_type_nonempty", `"evidence_objects"."source_type" <> ''`),
   rawCheck("evidence_objects_retention_class_nonempty", `"evidence_objects"."retention_class" <> ''`),
+  rawCheck(
+    "evidence_objects_session_id_grammar",
+    `"evidence_objects"."session_id" is null or "evidence_objects"."session_id" ~ '^usess_${ID_BODY}$'`,
+  ),
+  rawCheck(
+    "evidence_objects_encrypted_metadata_shape",
+    `"evidence_objects"."encrypted_metadata" is null or (jsonb_typeof("evidence_objects"."encrypted_metadata") = 'object' and ("evidence_objects"."encrypted_metadata" ? 'algorithm') and ("evidence_objects"."encrypted_metadata" ? 'ciphertext') and ("evidence_objects"."encrypted_metadata" ? 'wrappedKey') and ("evidence_objects"."encrypted_metadata" ? 'iv') and ("evidence_objects"."encrypted_metadata" ? 'tag') and ("evidence_objects"."encrypted_metadata" ? 'context'))`,
+  ),
   unique("uq_evidence_objects_object_key").on(t.objectKey),
+  // One finalized EvidenceObject per upload session (partial: legacy
+  // rows with NULL session_id are exempt — NULLs never collide).
+  uniqueIndex("uq_evidence_objects_session")
+    .on(t.sessionId)
+    .where(sql`"evidence_objects"."session_id" is not null`),
   index("idx_evidence_objects_person_created").on(t.personId, t.createdAt, t.id),
   index("idx_evidence_objects_sha256").on(t.sha256),
+]);
+
+// ---------------------------------------------------------------------------
+// Upload sessions (M2-D Lane A, §6 raw-object upload flow): the
+// pre-publication metadata record for one direct-to-store upload.
+// ---------------------------------------------------------------------------
+
+export const uploadSessions = pgTable("upload_sessions", {
+  sessionId: text("session_id").$type<UploadSessionId>().primaryKey(),
+  /** EvidenceObject id fixed at session creation (idempotency anchor). */
+  evidenceId: text("evidence_id")
+    .$type<EvidenceId>()
+    .notNull(),
+  personId: text("person_id")
+    .$type<PersonId>()
+    .notNull()
+    .references(() => persons.id),
+  /** Opaque content-addressed key (`evidence/v1/<id>/<sha256>`). */
+  objectKey: text("object_key").notNull(),
+  mediaType: text("media_type").notNull(),
+  declaredSha256: text("declared_sha256").notNull(),
+  declaredSizeBytes: bigint("declared_size_bytes", { mode: "number" }).notNull(),
+  /** Purpose of collection the upload was authorized under. */
+  purpose: text("purpose").notNull(),
+  /** Scope tokens the upload was authorized under. */
+  scope: text("scope").array().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+  state: text("state").$type<UploadSessionState>().notNull(),
+  /** Present iff state is "finalized" (CHECK-enforced). */
+  finalizedAt: timestamp("finalized_at", { withTimezone: true, mode: "date" }),
+}, (t) => [
+  idGrammarCheck("upload_sessions", "session_id", "usess"),
+  idGrammarCheck("upload_sessions", "evidence_id", "evid"),
+  idGrammarCheck("upload_sessions", "person_id", "prsn"),
+  vocabularyCheck("upload_sessions", "state", UPLOAD_SESSION_STATES),
+  rawCheck("upload_sessions_declared_sha256_hex", `"upload_sessions"."declared_sha256" ~ '^[0-9a-f]{64}$'`),
+  rawCheck("upload_sessions_declared_size_nonnegative", `"upload_sessions"."declared_size_bytes" >= 0`),
+  rawCheck("upload_sessions_object_key_nonempty", `"upload_sessions"."object_key" <> ''`),
+  rawCheck("upload_sessions_media_type_nonempty", `"upload_sessions"."media_type" <> ''`),
+  rawCheck("upload_sessions_purpose_nonempty", `"upload_sessions"."purpose" <> ''`),
+  rawCheck("upload_sessions_scope_nonempty", `array_length("upload_sessions"."scope", 1) > 0`),
+  rawCheck(
+    "upload_sessions_finalized_at_present",
+    `"upload_sessions"."state" <> 'finalized' or "upload_sessions"."finalized_at" is not null`,
+  ),
+  unique("uq_upload_sessions_evidence").on(t.evidenceId),
+  index("idx_upload_sessions_person_created").on(t.personId, t.createdAt, t.sessionId),
+  index("idx_upload_sessions_state_expires").on(t.state, t.expiresAt),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -434,6 +526,7 @@ export const schema = {
   provenances,
   healthIntents,
   evidenceObjects,
+  uploadSessions,
   observations,
   measurementPlans,
   accessGrants,

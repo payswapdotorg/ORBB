@@ -54,9 +54,14 @@ import {
   type SupersededPair,
 } from "@orbb/domain";
 import type { OutboxRecord } from "@orbb/contracts";
+import type { UploadSessionId, UploadSessionRecord } from "@orbb/databox";
 import { and, asc, desc, eq, gt, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import type { OrbbExecutor } from "./driver.js";
+import {
+  deserializeEncryptedEnvelope,
+  serializeEncryptedEnvelope,
+} from "./evidence-envelope.js";
 import type {
   AccountId,
   AccessAuditRecord,
@@ -67,6 +72,7 @@ import type {
   EvidenceObjectRecord,
   EvidenceObjectRepository,
   EvidenceObjectState,
+  FinalizeSessionOptions,
   HealthIntentRepository,
   MeasurementPlanRepository,
   MutationOptions,
@@ -77,6 +83,7 @@ import type {
   PersonRepository,
   ProvenanceRepository,
   TransitionOptions,
+  UploadSessionRepository,
 } from "./contracts.js";
 import type {
   CursorPage,
@@ -89,6 +96,7 @@ import {
   assertEvidenceObjectRecord,
   assertNewOutboxEvent,
   assertPersonRecord,
+  assertUploadSessionRecord,
 } from "./contracts.js";
 import { clampPageLimit, pageOf, parseCursor } from "./cursor.js";
 import { claimIdempotency } from "./idempotency.js";
@@ -105,6 +113,7 @@ import {
   outbox as outboxTable,
   persons as personsTable,
   provenances as provenancesTable,
+  uploadSessions as uploadSessionsTable,
 } from "./schema.js";
 
 // ---------------------------------------------------------------------------
@@ -180,6 +189,7 @@ type ProvenanceRow = typeof provenancesTable.$inferSelect;
 type IntentRow = typeof healthIntents.$inferSelect;
 type ObservationRow = typeof observations.$inferSelect;
 type EvidenceRow = typeof evidenceObjects.$inferSelect;
+type UploadSessionRow = typeof uploadSessionsTable.$inferSelect;
 type PlanRow = typeof measurementPlans.$inferSelect;
 type GrantRow = typeof accessGrants.$inferSelect;
 type AuditRow = typeof accessAudits.$inferSelect;
@@ -251,6 +261,30 @@ function toEvidence(row: EvidenceRow): EvidenceObjectRecord {
     provenanceId: row.provenanceId,
     retentionClass: row.retentionClass,
     state: row.state as EvidenceObjectState,
+    createdAt: row.createdAt,
+    // M2-D upload-plane columns (absent on legacy / non-upload rows).
+    ...(row.sessionId !== null ? { sessionId: row.sessionId } : {}),
+    ...(row.encryptedMetadata !== null
+      ? { encryptedMetadata: deserializeEncryptedEnvelope(row.encryptedMetadata) }
+      : {}),
+  };
+}
+
+function toUploadSession(row: UploadSessionRow): UploadSessionRecord {
+  return {
+    sessionId: row.sessionId,
+    evidenceId: row.evidenceId,
+    personId: row.personId,
+    objectKey: row.objectKey,
+    mediaType: row.mediaType,
+    declaredSha256: row.declaredSha256,
+    declaredSizeBytes: row.declaredSizeBytes,
+    purpose: row.purpose,
+    scope: row.scope,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+    state: row.state,
+    ...(row.finalizedAt !== null ? { finalizedAt: row.finalizedAt } : {}),
   };
 }
 
@@ -1024,13 +1058,21 @@ export class DrizzleEvidenceObjectRepository implements EvidenceObjectRepository
         provenanceId: evidence.provenanceId,
         retentionClass: evidence.retentionClass,
         state: evidence.state,
-        createdAt: this.#clock.now(),
+        // The upstream record owns its creation time when it carries one
+        // (intent/plan convention); otherwise the persistence layer
+        // stamps it (M2-A behavior).
+        createdAt: evidence.createdAt ?? this.#clock.now(),
+        // M2-D upload-plane columns (absent on legacy / non-upload rows).
+        ...(evidence.sessionId !== undefined ? { sessionId: evidence.sessionId } : {}),
+        ...(evidence.encryptedMetadata !== undefined
+          ? { encryptedMetadata: serializeEncryptedEnvelope(evidence.encryptedMetadata) }
+          : {}),
       })
       .onConflictDoNothing()
       .returning();
     const row = rows[0];
     if (row === undefined) {
-      throw uniqueConflict("evidence object (id or object key already stored)");
+      throw uniqueConflict("evidence object (id, object key, or session already stored)");
     }
     // EVIDENCE_INGESTED (§11).
     this.#ctx.noteMutation(true);
@@ -1077,6 +1119,160 @@ export class DrizzleEvidenceObjectRepository implements EvidenceObjectRepository
       .limit(limit + 1);
     const { items, nextCursor } = pageOf(rows, limit);
     return { items: items.map(toEvidence), nextCursor };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// UploadSession (M2-D Lane A — §6 raw-object upload flow).
+// ---------------------------------------------------------------------------
+
+export class DrizzleUploadSessionRepository implements UploadSessionRepository {
+  readonly #ex: OrbbExecutor;
+  readonly #clock: Clock;
+  readonly #ctx: MutationContext;
+
+  constructor(ex: OrbbExecutor, clock: Clock, ctx: MutationContext) {
+    this.#ex = ex;
+    this.#clock = clock;
+    this.#ctx = ctx;
+  }
+
+  async insert(
+    session: UploadSessionRecord,
+    options: MutationOptions,
+  ): Promise<UploadSessionRecord> {
+    requireMutationScope(this.#ctx);
+    assertUploadSessionRecord(session);
+    const claim = await claimIdempotency(this.#ex, this.#clock, {
+      tableName: "upload_sessions",
+      operation: "insert",
+      idempotencyKey: options.idempotencyKey,
+      recordId: session.sessionId,
+    });
+    if (claim.replayed) {
+      const stored = await this.findById(claim.recordId as UploadSessionId);
+      if (stored === undefined) {
+        throw replayMissing("upload session");
+      }
+      return stored;
+    }
+    const rows = await this.#ex
+      .insert(uploadSessionsTable)
+      .values({
+        sessionId: session.sessionId,
+        evidenceId: session.evidenceId,
+        personId: session.personId,
+        objectKey: session.objectKey,
+        mediaType: session.mediaType,
+        declaredSha256: session.declaredSha256,
+        declaredSizeBytes: session.declaredSizeBytes,
+        purpose: session.purpose,
+        scope: [...session.scope],
+        createdAt: session.createdAt,
+        expiresAt: session.expiresAt,
+        state: session.state,
+        ...(session.finalizedAt !== undefined ? { finalizedAt: session.finalizedAt } : {}),
+      })
+      .onConflictDoNothing()
+      .returning();
+    const row = rows[0];
+    if (row === undefined) {
+      throw uniqueConflict("upload session (session or evidence id already stored)");
+    }
+    // No canonical UPLOAD_SESSION_* event type exists (§11) — a session
+    // insert does not arm the outbox guard (create-before-publication
+    // metadata, the persons/accounts precedent).
+    this.#ctx.noteMutation(false);
+    return toUploadSession(row);
+  }
+
+  async findById(sessionId: UploadSessionId): Promise<UploadSessionRecord | undefined> {
+    const rows = await this.#ex
+      .select()
+      .from(uploadSessionsTable)
+      .where(eq(uploadSessionsTable.sessionId, sessionId))
+      .limit(1);
+    return rows[0] === undefined ? undefined : toUploadSession(rows[0]);
+  }
+
+  async listByPerson(
+    personId: PersonId,
+    page?: CursorPage,
+  ): Promise<CursorPageResult<UploadSessionRecord>> {
+    const limit = clampPageLimit(page?.limit);
+    const conditions: SQL[] = [eq(uploadSessionsTable.personId, personId)];
+    if (page?.cursor !== undefined) {
+      conditions.push(
+        cursorCondition(
+          page.cursor,
+          uploadSessionsTable.createdAt,
+          uploadSessionsTable.sessionId,
+          "desc",
+        ),
+      );
+    }
+    const rows = await this.#ex
+      .select()
+      .from(uploadSessionsTable)
+      .where(and(...conditions))
+      .orderBy(desc(uploadSessionsTable.createdAt), desc(uploadSessionsTable.sessionId))
+      .limit(limit + 1);
+    // The anchor is (created_at, session_id); wrap the rows so the
+    // generic pageOf sees a uniform (createdAt, id) anchor shape (the
+    // same pattern as the outbox repository).
+    const anchored = rows.map((row) => ({ createdAt: row.createdAt, id: row.sessionId, row }));
+    const { items, nextCursor } = pageOf(anchored, limit);
+    return { items: items.map((anchor) => toUploadSession(anchor.row)), nextCursor };
+  }
+
+  async markFinalized(
+    sessionId: UploadSessionId,
+    options: FinalizeSessionOptions,
+  ): Promise<UploadSessionRecord> {
+    requireMutationScope(this.#ctx);
+    if (options.expectedFrom !== "open") {
+      throw new PersistenceError(
+        "invalid-request",
+        "Invalid upload-session finalize: the only legal transition is open → finalized.",
+      );
+    }
+    const claim = await claimIdempotency(this.#ex, this.#clock, {
+      tableName: "upload_sessions",
+      operation: "finalize",
+      idempotencyKey: options.idempotencyKey,
+      recordId: sessionId,
+    });
+    if (claim.replayed) {
+      const stored = await this.findById(claim.recordId as UploadSessionId);
+      if (stored === undefined) {
+        throw replayMissing("upload session");
+      }
+      return stored;
+    }
+    const rows = await this.#ex
+      .update(uploadSessionsTable)
+      .set({ state: "finalized", finalizedAt: options.finalizedAt })
+      .where(
+        and(eq(uploadSessionsTable.sessionId, sessionId), eq(uploadSessionsTable.state, "open")),
+      )
+      .returning();
+    const row = rows[0];
+    if (row !== undefined) {
+      // The session flip itself has no canonical §11 event type — the
+      // EVIDENCE_INGESTED event belongs to the evidence insert that this
+      // transition accompanies (driven by the M2-D adapter, one
+      // transaction).
+      this.#ctx.noteMutation(false);
+      return toUploadSession(row);
+    }
+    const current = await this.findById(sessionId);
+    if (current === undefined) {
+      throw notFound("upload session");
+    }
+    if (current.state === "finalized") {
+      return current;
+    }
+    throw diverged("upload session");
   }
 }
 

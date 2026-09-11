@@ -21,6 +21,7 @@ import type {
   PersonId,
   Provenance,
 } from "@orbb/domain";
+import type { UploadSessionRecord, UploadSessionId } from "@orbb/databox";
 import type { EventId } from "@orbb/contracts";
 import type { DomainEventType } from "@orbb/contracts";
 import { DeterministicClock, DeterministicIdFactory } from "@orbb/testkit";
@@ -34,6 +35,8 @@ import type {
 
 const MS_PER_DAY = 86_400_000;
 const SYNTH_EVIDENCE_BYTES = "SYNTH-evidence-bytes-v1";
+/** Default upload-session TTL (mirrors the databox service default). */
+const SESSION_TTL_MS = 900_000;
 
 export const SYNTH_SHA256 = createHash("sha256").update(SYNTH_EVIDENCE_BYTES).digest("hex");
 export const SYNTH_EVIDENCE_SIZE = Buffer.byteLength(SYNTH_EVIDENCE_BYTES);
@@ -51,6 +54,7 @@ export interface FixtureWorld {
     overrides?: Partial<Pick<Observation, "id" | "validationState" | "supersedesId" | "value" | "evidenceId" | "quality">>,
   ): Observation;
   evidence(personId: PersonId, provenanceId: Provenance["provenanceId"]): EvidenceObjectRecord;
+  uploadSession(personId: PersonId): UploadSessionRecord;
   plan(personId: PersonId, intentId: HealthIntent["id"]): MeasurementPlan;
   grant(subjectId: PersonId): AccessGrant;
   audit(subjectId: PersonId, decision?: "ALLOW" | "DENY"): AccessAuditRecord;
@@ -135,6 +139,27 @@ export function fixtureWorld(seed: string): FixtureWorld {
         provenanceId: provId,
         retentionClass: "original",
         state: "active",
+        // M2-D: the upstream record owns its creation time (stored
+        // verbatim by the repository; round-trip equality depends on it).
+        createdAt: clock.now(),
+      };
+    },
+    uploadSession(pid: PersonId): UploadSessionRecord {
+      const sessionId = ids.next("usess") as UploadSessionId;
+      const evidenceId = ids.next("evid") as UploadSessionRecord["evidenceId"];
+      return {
+        sessionId,
+        evidenceId,
+        personId: pid,
+        objectKey: `evidence/v1/${evidenceId}/${SYNTH_SHA256}`,
+        mediaType: "image/jpeg",
+        declaredSha256: SYNTH_SHA256,
+        declaredSizeBytes: SYNTH_EVIDENCE_SIZE,
+        purpose: "SYNTH-SELF_TRACKING",
+        scope: ["evidence:write"],
+        createdAt: clock.now(),
+        expiresAt: new Date(clock.epochMs + SESSION_TTL_MS),
+        state: "open",
       };
     },
     plan(pid: PersonId, intentId: HealthIntent["id"]): MeasurementPlan {

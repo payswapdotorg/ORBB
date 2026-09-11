@@ -34,6 +34,7 @@ import {
   outbox,
   persons,
   provenances,
+  uploadSessions,
 } from "./schema.js";
 
 const MIGRATIONS_DIR = fileURLToPath(new URL("../migrations", import.meta.url));
@@ -102,21 +103,47 @@ describe("schema type-level shapes", () => {
     expect(getTableColumns(observations).supersedesId.notNull).toBe(false);
   });
 
-  it("evidence_objects: §5 field list + operational columns", () => {
+  it("evidence_objects: §5 field list + operational columns + M2-D upload-plane columns", () => {
     expect(Object.keys(getTableColumns(evidenceObjects)).sort()).toEqual([
       "capturedAt",
       "createdAt",
+      "encryptedMetadata",
       "id",
       "mediaType",
       "objectKey",
       "personId",
       "provenanceId",
       "retentionClass",
+      "sessionId",
       "sha256",
       "sizeBytes",
       "sourceType",
       "state",
     ]);
+    // M2-D upload-plane columns are nullable (legacy rows carry none).
+    expect(getTableColumns(evidenceObjects).sessionId.notNull).toBe(false);
+    expect(getTableColumns(evidenceObjects).encryptedMetadata.notNull).toBe(false);
+  });
+
+  it("upload_sessions: mirrors the frozen databox UploadSessionRecord", () => {
+    expect(Object.keys(getTableColumns(uploadSessions)).sort()).toEqual([
+      "createdAt",
+      "declaredSha256",
+      "declaredSizeBytes",
+      "evidenceId",
+      "expiresAt",
+      "finalizedAt",
+      "mediaType",
+      "objectKey",
+      "personId",
+      "purpose",
+      "scope",
+      "sessionId",
+      "state",
+    ]);
+    expect(getTableColumns(uploadSessions).sessionId.notNull).toBe(true);
+    expect((getTableColumns(uploadSessions).sessionId as unknown as { primary: boolean }).primary).toBe(true);
+    expect(getTableColumns(uploadSessions).finalizedAt.notNull).toBe(false);
   });
 
   it("measurement_plans: §5 field list with metrics array", () => {
@@ -238,10 +265,31 @@ describe("migration drift guards (frozen vocabularies reach the SQL)", () => {
     expect(journal.entries.map((e) => e.tag)).toEqual([
       "0000_m2_a_persistence_core",
       "0001_access_audits_append_only",
+      "0002_evidence_upload_store",
     ]);
     const trigger = readMigration("0001_access_audits_append_only.sql");
     expect(trigger).toContain("orbb_reject_access_audit_mutation");
     expect(trigger).toContain("BEFORE UPDATE OR DELETE");
     expect(trigger).toContain("BEFORE TRUNCATE");
+  });
+
+  it("0002 upload-store migration: usess_ grammar reaches the SQL", () => {
+    const sql0002 = readMigration("0002_evidence_upload_store.sql");
+    expect(sql0002).toContain("~ '^usess_");
+    expect(sql0002).toContain(
+      "CONSTRAINT \"upload_sessions_state_vocabulary\" CHECK (\"upload_sessions\".\"state\" in ('open', 'finalized'))",
+    );
+    expect(sql0002).toContain("CONSTRAINT \"uq_upload_sessions_evidence\" UNIQUE(\"evidence_id\")");
+    expect(sql0002).toContain('FOREIGN KEY ("person_id") REFERENCES "persons"("id")');
+    expect(sql0002).toContain("array_length(\"upload_sessions\".\"scope\", 1) > 0");
+  });
+
+  it("0002 upload-store migration: evidence_objects upload-plane columns + partial unique index", () => {
+    const sql0002 = readMigration("0002_evidence_upload_store.sql");
+    expect(sql0002).toContain('ALTER TABLE "evidence_objects" ADD COLUMN "session_id" text');
+    expect(sql0002).toContain('ALTER TABLE "evidence_objects" ADD COLUMN "encrypted_metadata" jsonb');
+    expect(sql0002).toContain('CREATE UNIQUE INDEX "uq_evidence_objects_session"');
+    expect(sql0002).toContain('WHERE "evidence_objects"."session_id" IS NOT NULL');
+    expect(sql0002).toContain("jsonb_typeof");
   });
 });

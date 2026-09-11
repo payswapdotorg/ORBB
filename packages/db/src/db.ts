@@ -41,6 +41,7 @@ import {
   DrizzleOutboxRepository,
   DrizzlePersonRepository,
   DrizzleProvenanceRepository,
+  DrizzleUploadSessionRepository,
   type MutationContext,
 } from "./repositories.js";
 import { schema } from "./schema.js";
@@ -79,6 +80,7 @@ class DrizzleDb implements Db {
   readonly intents: Db["intents"];
   readonly observations: Db["observations"];
   readonly evidence: Db["evidence"];
+  readonly uploadSessions: Db["uploadSessions"];
   readonly plans: Db["plans"];
   readonly grants: Db["grants"];
   readonly audits: Db["audits"];
@@ -94,6 +96,7 @@ class DrizzleDb implements Db {
     this.intents = new DrizzleHealthIntentRepository(db, clock, ROOT_MUTATION_CONTEXT);
     this.observations = new DrizzleObservationRepository(db, clock, ROOT_MUTATION_CONTEXT);
     this.evidence = new DrizzleEvidenceObjectRepository(db, clock, ROOT_MUTATION_CONTEXT);
+    this.uploadSessions = new DrizzleUploadSessionRepository(db, clock, ROOT_MUTATION_CONTEXT);
     this.plans = new DrizzleMeasurementPlanRepository(db, clock, ROOT_MUTATION_CONTEXT);
     this.grants = new DrizzleAccessGrantRepository(db, clock, ROOT_MUTATION_CONTEXT);
     this.audits = new DrizzleAccessAuditRepository(db, clock, ROOT_MUTATION_CONTEXT);
@@ -124,6 +127,7 @@ class DrizzleDb implements Db {
         intents: new DrizzleHealthIntentRepository(tx, this.#clock, ctx),
         observations: new DrizzleObservationRepository(tx, this.#clock, ctx),
         evidence: new DrizzleEvidenceObjectRepository(tx, this.#clock, ctx),
+        uploadSessions: new DrizzleUploadSessionRepository(tx, this.#clock, ctx),
         plans: new DrizzleMeasurementPlanRepository(tx, this.#clock, ctx),
         grants: new DrizzleAccessGrantRepository(tx, this.#clock, ctx),
         audits: new DrizzleAccessAuditRepository(tx, this.#clock, ctx),
