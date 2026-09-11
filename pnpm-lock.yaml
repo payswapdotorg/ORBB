@@ -334,6 +334,24 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.2)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.9.0)
 
+  packages/observability:
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.30.0
+        version: 9.39.5
+      eslint:
+        specifier: ^9.30.0
+        version: 9.39.5(jiti@2.7.0)
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.30.0
+        version: 8.70.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.2)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.33.0)(terser@5.51.2)(yaml@2.9.0)
+
   packages/platform:
     devDependencies:
       '@eslint/js':
