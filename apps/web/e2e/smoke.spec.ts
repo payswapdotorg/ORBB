@@ -5,10 +5,11 @@ import { expect, test } from "@playwright/test";
  *
  * Exercises the user-mode surface the tech lead will build on:
  *   load `/` → 8 architecture nav items render → switch role to Clinician →
- *   nav emphasis changes → navigate to the DataBox placeholder → heading.
+ *   nav emphasis changes → navigate to the DataBox journey → real surface
+ *   mounts (M3-B: evidence table + sharing card on @orbb/ui).
  *
  * The shell is static: no network mocks of real APIs, no real data, no real
- * credentials — only synthetic placeholder strings.
+ * credentials — only synthetic placeholder strings and SYNTH fixtures.
  */
 const NAV_LABELS = [
   "Overview",
@@ -21,7 +22,7 @@ const NAV_LABELS = [
   "Settings",
 ] as const;
 
-test("web shell renders, role emphasis switches, and the DataBox placeholder loads", async ({
+test("web shell renders, role emphasis switches, and the DataBox journey loads", async ({
   page,
 }) => {
   await page.goto("/");
@@ -72,12 +73,17 @@ test("web shell renders, role emphasis switches, and the DataBox placeholder loa
     page.getByRole("radio", { name: "Clinician" }),
   ).toBeChecked();
 
-  // 4. Navigate to the DataBox placeholder and assert the heading + notice.
+  // 4. Navigate to the DataBox journey and assert the real mounted surface
+  //    (M3-B: the M0 placeholder was replaced by the design-system journey).
   await nav.getByRole("link", { name: "DataBox", exact: true }).click();
   await expect(page).toHaveURL(/\/databox$/);
   await expect(
     page.getByRole("heading", { level: 1, name: "DataBox" }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "Coming in M6+" })).toBeVisible();
-  await expect(page.getByText(/synthetic placeholder screen/i)).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Evidence" })).toBeVisible();
+  await expect(page.getByRole("table")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Sharing" }),
+  ).toBeVisible();
+  await expect(page.getByText(/synthetic \(SYNTH\)/i)).toBeVisible();
 });

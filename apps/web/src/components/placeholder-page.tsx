@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Card, Heading, Text } from "@orbb/ui";
 
 export interface PlaceholderPageProps {
@@ -5,6 +6,12 @@ export interface PlaceholderPageProps {
   title: string;
   /** One-line synthetic description of the future surface (placeholder copy). */
   description: string;
+  /**
+   * Optional content rendered above the description, inside the page
+   * container (M3-B: the role-emphasis live-region notice on the Care
+   * surface, one of the Clinician-emphasized surfaces).
+   */
+  preface?: ReactNode;
 }
 
 /**
@@ -14,11 +21,12 @@ export interface PlaceholderPageProps {
  * no invented domain features, no fake data beyond the synthetic placeholder
  * string.
  */
-export function PlaceholderPage({ title, description }: PlaceholderPageProps) {
+export function PlaceholderPage({ title, description, preface }: PlaceholderPageProps) {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <Heading level={1}>{title}</Heading>
       <Text variant="muted">{description}</Text>
+      {preface !== undefined ? <div className="mt-2">{preface}</div> : null}
 
       <Card>
         <Heading level={2}>Coming in M6+</Heading>
