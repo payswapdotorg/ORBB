@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
 import {
   NAV_ITEMS,
   NAV_ITEM_LABELS,
@@ -11,8 +10,8 @@ import {
   ROLE_LABELS,
   ROLES,
   isEmphasized,
-  type Role,
 } from "@/lib/roles";
+import { useRole } from "./role-provider";
 
 /**
  * Site header: brand, role switcher, and the primary navigation.
@@ -22,9 +21,13 @@ import {
  * `data-emphasized="true|false"` on each link, so the emphasis contract is
  * machine-checkable (Playwright + a11y tree), while visual emphasis uses
  * token-driven utilities (accent color + weight). Nav order is role-stable.
+ *
+ * M3-B: the selected role lives in the app-wide `RoleProvider` context so
+ * mounted surfaces (DataBox, Measurements, Care) can react to the same
+ * emphasis model; the header's own DOM contract is unchanged.
  */
 export function SiteHeader() {
-  const [role, setRole] = useState<Role>("person");
+  const { role, setRole } = useRole();
   const pathname = usePathname();
 
   return (

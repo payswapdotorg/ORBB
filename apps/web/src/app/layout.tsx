@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { tokensToCssCustomProperties } from "@orbb/ui";
+import { RoleProvider } from "@/components/role-provider";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import "./globals.css";
@@ -38,10 +39,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <a className="skip-link rounded-card bg-surface px-4 py-2 text-body font-medium text-accent shadow-lg" href="#main-content">
           Skip to main content
         </a>
-        <SiteHeader />
-        <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
-          {children}
-        </main>
+        {/*
+          RoleProvider owns the app-wide role state (M3-B) so the header's
+          emphasis model and the mounted surfaces (DataBox, Measurements,
+          Care) share one source of truth. The provider renders no DOM.
+        */}
+        <RoleProvider>
+          <SiteHeader />
+          <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
+            {children}
+          </main>
+        </RoleProvider>
         <SiteFooter />
       </body>
     </html>
