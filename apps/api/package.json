@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "ORBB edge API — minimal Cloudflare Worker shell (M0): Hono app exposing GET /healthz. Builds with `wrangler deploy --dry-run --outdir=dist` (no credentials, no account_id, no routes).",
+  "description": "ORBB edge API (M3-A): the real /v1 Hono router on a Cloudflare Worker — standardized error envelope + request ids, the principal verifier seam, person-scoped resources (me, intents, observations, evidence metadata) over injected repository interfaces, A24 Idempotency-Key middleware, and the A26 OpenAPI 3.1 document. Builds with `wrangler deploy --dry-run --outdir=dist` (no credentials).",
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -11,10 +11,17 @@
     "build": "wrangler deploy --dry-run --outdir=dist",
     "dev": "wrangler dev"
   },
+  "dependencies": {
+    "@orbb/contracts": "workspace:*",
+    "@orbb/db": "workspace:*",
+    "@orbb/domain": "workspace:*",
+    "hono": "^4.13.7"
+  },
   "devDependencies": {
     "@eslint/js": "^9.30.0",
+    "@orbb/testkit": "workspace:*",
+    "@types/node": "^22.0.0",
     "eslint": "^9.30.0",
-    "hono": "^4.13.7",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.30.0",
     "vitest": "^3.2.4",

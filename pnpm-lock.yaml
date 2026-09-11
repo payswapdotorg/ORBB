@@ -19,16 +19,32 @@ importers:
         version: 3.2.7(@types/node@22.20.2)(jiti@2.7.0)(jsdom@30.0.1)(lightningcss@1.33.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0)
 
   apps/api:
+    dependencies:
+      '@orbb/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@orbb/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@orbb/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      hono:
+        specifier: ^4.13.7
+        version: 4.13.7
     devDependencies:
       '@eslint/js':
         specifier: ^9.30.0
         version: 9.39.5
+      '@orbb/testkit':
+        specifier: workspace:*
+        version: link:../../packages/testkit
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.2
       eslint:
         specifier: ^9.30.0
         version: 9.39.5(jiti@2.7.0)
-      hono:
-        specifier: ^4.13.7
-        version: 4.13.7
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
