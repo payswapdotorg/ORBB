@@ -171,13 +171,26 @@ importers:
         version: 4.131.0(@types/node@22.20.2)
 
   packages/auth:
+    dependencies:
+      '@orbb/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@orbb/observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@orbb/platform':
+        specifier: workspace:*
+        version: link:../platform
+      '@orbb/testkit':
+        specifier: workspace:*
+        version: link:../testkit
     devDependencies:
       '@eslint/js':
         specifier: ^9.30.0
         version: 9.39.5
-      '@orbb/domain':
-        specifier: workspace:*
-        version: link:../domain
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.2
       eslint:
         specifier: ^9.30.0
         version: 9.39.5(jiti@2.7.0)

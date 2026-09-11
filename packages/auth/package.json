@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Identity and access boundary for ORBB: will own sessions, passkeys, and scoped tokens. M0 boundary package — re-exports the identity principal types it will own.",
+  "description": "Identity boundary for ORBB (architecture §3 A22 + A25): opaque session tokens (hashed-at-rest, injectable clock/id/store), dependency-free WebAuthn passkey verification (L3 shapes, trust-ignored attestation), single-use email OTP with attempt counting and platform-RateLimiter resend throttling, single-use recovery codes, the Upstash REST rate-limit adapter (shape-verified, not live-verified), and account lifecycle seams against the @orbb/db repository shapes. Zero runtime package dependencies: all crypto is node:crypto.",
   "main": "./dist/index.js",
   "types": "./src/index.ts",
   "scripts": {
@@ -12,9 +12,15 @@
     "test": "vitest run",
     "build": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "@orbb/domain": "workspace:*",
+    "@orbb/observability": "workspace:*",
+    "@orbb/platform": "workspace:*",
+    "@orbb/testkit": "workspace:*"
+  },
   "devDependencies": {
     "@eslint/js": "^9.30.0",
-    "@orbb/domain": "workspace:*",
+    "@types/node": "^22.0.0",
     "eslint": "^9.30.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.30.0",
