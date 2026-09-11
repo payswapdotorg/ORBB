@@ -1,0 +1,22 @@
+{
+  "name": "@orbb/observability",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Observability primitives for ORBB (architecture §2, §6): structured logging with injectable sinks, deny-by-default PHI redaction with stable hash pseudonyms, pure trace primitives, and route-pattern request log envelopes. Pure TypeScript — zero runtime dependencies, no provider SDKs (Sentry/PostHog adapters arrive in a later milestone via the @orbb/platform interface pattern).",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}
