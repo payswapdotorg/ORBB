@@ -4,15 +4,19 @@ import { StyleSheet, Text } from "react-native";
 
 import { TABS } from "./navigation/tabs";
 import { PlaceholderScreen, TAB_BAR_HEIGHT } from "./screens/placeholder-screen";
+import { HealthScreen } from "./screens/health-screen";
 import { color, typography } from "@orbb/ui/tokens";
 
 /**
- * ORBB mobile shell (M0-B).
+ * ORBB mobile shell (M0-B, extended by M4-B).
  *
  * A five-destination bottom-tab navigator exactly per the frozen
- * architecture: `Today | Health | DataBox | Services | You`. Each tab renders
- * a token-styled placeholder screen ("Coming in M6+"). Tab icons are simple
- * text glyphs; tab labels double as accessibility labels.
+ * architecture: `Today | Health | DataBox | Services | You`. The Health
+ * tab now carries the real manual-capture journey (M4-B: three-step
+ * capture form with quality self-assessment, offline-tolerant submit, and
+ * the recent-observations history); the other destinations remain
+ * token-styled placeholder screens ("Coming in M6+"). Tab icons are
+ * simple text glyphs; tab labels double as accessibility labels.
  *
  * Navigation choice (recorded in the M0-B report): @react-navigation/bottom-tabs
  * over expo-router — the M0 shell needs exactly five static tabs, no deep
@@ -59,7 +63,13 @@ export default function App() {
               tabBarAccessibilityLabel: `${tab.label} tab`,
             }}
           >
-            {() => <PlaceholderScreen title={tab.label} note={tab.note} />}
+            {() =>
+              tab.key === "health" ? (
+                <HealthScreen />
+              ) : (
+                <PlaceholderScreen title={tab.label} note={tab.note} />
+              )
+            }
           </Tab.Screen>
         ))}
       </Tab.Navigator>

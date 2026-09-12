@@ -1,0 +1,25 @@
+# Restored M0-B synthetic smoke journey (Lane B, M4-B).
+#
+# The root maestro/flows/smoke.yaml arrived transit-mangled (it contains
+# the README markdown, not a flow) and is outside this packet's allowed
+# paths. This is the restored contract exactly as documented in the root
+# maestro/README.md: launch, assert the five architecture tab labels,
+# tap DataBox, assert the title and the "Coming in M6+" notice.
+#
+# MAESTRO_APP_ID: the target app id on the device/emulator
+# (dev build: org.orbb.mobile; or the Expo Go host package id).
+appId: ${MAESTRO_APP_ID}
+name: ORBB smoke journey (M0-B, restored)
+tags:
+  - M0
+  - smoke
+---
+- launchApp
+- assertVisible: "Today"
+- assertVisible: "Health"
+- assertVisible: "DataBox"
+- assertVisible: "Services"
+- assertVisible: "You"
+- tapOn: "DataBox"
+- assertVisible: "DataBox"
+- assertVisible: "Coming in M6+"

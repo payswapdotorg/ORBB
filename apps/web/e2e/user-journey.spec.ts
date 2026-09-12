@@ -1,18 +1,22 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * M3-B user-mode journeys (web shell): the DataBox journey deepened onto
- * the `@orbb/ui` design system.
+ * User-mode journeys (web shell): the DataBox journey (M3-B) plus the
+ * manual measurement capture journey (M4-B).
  *
- * Covers, per the packet:
+ * Covers, per the packets:
  * 1. the evidence journey — sortable table columns, per-row disclosure
  *    metadata, the timeline view toggle, and the aria-live announcements
  *    of surface/view + role-emphasis changes;
  * 2. the consent-sheet open/confirm/revoke flow (visible feedback + focus
  *    behavior: focus moves into the modal, is trapped, and returns to the
  *    trigger on close);
- * 3. the measurement form fill/submit flow (guard semantics, validation
- *    errors, submission to the route-handler stub, synthetic echo).
+ * 3. the MANUAL CAPTURE journey — the full M4-B flow: pick metric (seeded
+ *    synthetic catalog) -> pick method (manual-only) -> enter values +
+ *    context -> review with quality self-assessment -> submit to the
+ *    in-memory-store route -> visible success with provenance actor +
+ *    method + recorded quality -> the capture history with
+ *    method/quality/provenance badges in both list and timeline views.
  *
  * All data is synthetic (SYNTH) — no real medical data, no real
  * credentials, no network mocks of real APIs.
@@ -55,7 +59,7 @@ test("evidence journey: sortable table, disclosure metadata, timeline view, emph
   await expect(page.getByText("sha256-SYNTH-7c4a8d09")).toBeVisible();
   await expect(page.getByText("Retention class")).toBeVisible();
   await expect(page.getByText("SYNTH-RT-2Y")).toBeVisible();
-  await expect(page.getByText("Provenance actor")).toBeVisible();
+  await expect(page.getByText("Provenance actor", { exact: true })).toBeVisible();
 
   // Switch to the timeline view: the table leaves the DOM, day-grouped
   // timeline entries render, and the view change is announced politely.
@@ -162,7 +166,7 @@ test("consent journey: share with clinician — open, confirm, revoke with focus
   await expect(page.getByRole("button", { name: "Share again" })).toBeVisible();
 });
 
-test("measurement journey: record a measurement — validation, guard, submit, echo", async ({
+test("capture journey: record a manual measurement — metric, method, values, review, submit, history with badges", async ({
   page,
 }) => {
   await page.goto("/measurements");
@@ -184,48 +188,195 @@ test("measurement journey: record a measurement — validation, guard, submit, e
   await expect(barChart).toBeVisible();
   await expect(page.getByText(/20 synthetic captures this week\./)).toBeVisible();
 
-  // Task card context: metric, due-window badge, reason.
-  await expect(page.getByText("Due by 09:00")).toBeVisible();
+  // The capture flow starts at step 1: the metric picker over the seeded
+  // synthetic catalog.
   await expect(
-    page.getByText(/Supports your synthetic monitoring plan/),
+    page.getByRole("heading", { level: 2, name: "Record a measurement" }),
+  ).toBeVisible();
+  await expect(page.getByText("Step 1 of 3 — choose what you measured")).toBeVisible();
+  await expect(
+    page.getByRole("radiogroup", { name: /what did you measure\?/i }),
   ).toBeVisible();
 
-  const valueInput = page.getByLabel(/measured value/i);
-  const saveButton = page.getByRole("button", { name: "Save measurement" });
-
-  // 1. Empty submission → value error (field wiring: aria-invalid).
-  await saveButton.click();
-  await expect(page.getByText("Enter a value before saving.")).toBeVisible();
-  await expect(valueInput).toHaveAttribute("aria-invalid", "true");
-
-  // 2. Library guard semantics: out-of-range commits clamp on blur.
-  await valueInput.fill("250");
-  await valueInput.blur();
-  await expect(valueInput).toHaveValue("220");
-  await valueInput.fill("10");
-  await valueInput.blur();
-  await expect(valueInput).toHaveValue("30");
-
-  // 3. Valid value but no method → method error (polite live region).
-  await valueInput.fill("72");
-  await saveButton.click();
+  // 1. Continuing without a metric choice is blocked with a field error.
+  await page.getByRole("button", { name: "Continue" }).click();
   await expect(
-    page.getByText("Choose a capture method before saving."),
+    page.getByText("Choose what you measured to continue."),
   ).toBeVisible();
 
-  // 4. Pick the least-burden method (the radiogroup row is the click target
-  //    — the native radio it wraps is visually clipped by the library) and
-  //    submit to the route-handler stub.
-  await page.getByText("Manual pulse check", { exact: true }).click();
+  // 2. Pick the compound metric (blood pressure panel) and continue.
+  // The native radio is visually clipped (library contract), so the
+  // visible option label is the click target.
+  await page
+    .getByRole("radiogroup", { name: /what did you measure\?/i })
+    .getByText("Blood pressure", { exact: true })
+    .click();
   await expect(
-    page.getByRole("radio", { name: /manual pulse check/i }),
+    page.getByRole("radio", { name: /blood pressure/i }),
   ).toBeChecked();
-  await saveButton.click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Step 2 of 3 — method, values, and context")).toBeVisible();
 
-  // The stub route validates and returns a synthetic echo.
-  await expect(page.getByText(/Measurement saved: 72 beats\/min via Manual pulse check/)).toBeVisible();
-  await expect(page.getByText(/SYNTH-OBS-\d{4}/)).toBeVisible();
+  // The method picker shows the single enabled manual option plus the
+  // disabled future device/app routes (least-burden landscape, not choosable).
+  const manualMethod = page.getByRole("radio", {
+    name: /manual entry — home bp cuff reading/i,
+  });
+  await expect(manualMethod).toBeEnabled();
   await expect(
-    page.getByText(/Synthetic — nothing real was stored\./),
+    page.getByRole("radio", { name: /automatic cuff sync/i }),
+  ).toBeDisabled();
+
+  // 3. Step-2 validation: no method and no values yet -> both errors.
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(
+    page.getByText("Choose a capture method to continue."),
   ).toBeVisible();
+  await expect(
+    page.getByText("Enter a value before continuing."),
+  ).toHaveCount(2);
+
+  // 4. Library guard semantics: out-of-range commits clamp on blur.
+  const systolic = page.getByLabel(/systolic \(blood pressure systolic\)/i);
+  await systolic.fill("350");
+  await systolic.blur();
+  await expect(systolic).toHaveValue("300");
+
+  // 5. Fill the compound values, pick the manual method, check the
+  //    default capture time (now, editable), add notes, continue.
+  await systolic.fill("118");
+  await page.getByLabel(/diastolic \(blood pressure diastolic\)/i).fill("76");
+  await page.getByText("Manual entry — home BP cuff reading", { exact: true }).click();
+  await expect(manualMethod).toBeChecked();
+  const timeInput = page.getByLabel(/capture time/i);
+  await expect(timeInput).toHaveValue(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+  await page.getByLabel(/notes \(optional\)/i).fill("Morning reading");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Step 3 of 3 — review and save")).toBeVisible();
+
+  // 6. The review step summarizes values, the method actually used, and
+  //    carries the quality self-assessment control.
+  await expect(page.getByRole("heading", { level: 3, name: "Review" })).toBeVisible();
+  await expect(
+    page.getByText(/Systolic: 118 mmHg · Diastolic: 76 mmHg/),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      /per-observation methods: SYNTH-method-bpsys-manual, SYNTH-method-bpdia-manual/,
+    ),
+  ).toBeVisible();
+
+  // 7. Submitting without a self-assessment is blocked (quality is a
+  //    first-class, explicit decision — never defaulted).
+  await page.getByRole("button", { name: "Save measurement" }).click();
+  await expect(
+    page.getByText("Choose a quality self-assessment before saving."),
+  ).toBeVisible();
+
+  // 8. Self-assess as PARTIAL and submit — the submission lands recorded
+  //    as partial, never silently upgraded.
+  await page
+    .getByRole("radiogroup", { name: /quality self-assessment/i })
+    .getByText("Partial", { exact: true })
+    .click();
+  await expect(page.getByRole("radio", { name: /^partial/i })).toBeChecked();
+  await page.getByRole("button", { name: "Save measurement" }).click();
+
+  // 9. Success feedback lists the new observations with the provenance
+  //    actor (the person — self-tracking) and the method actually used.
+  //    Scoped to the recorded region so history rows never collide.
+  const recorded = page.locator('[data-capture-recorded="true"]');
+  await expect(recorded.getByText("Measurement saved.", { exact: true })).toBeVisible();
+  await expect(
+    recorded.getByText(/Blood pressure 118\/76 mmHg — via Manual entry/),
+  ).toBeVisible();
+  await expect(
+    recorded.getByText(
+      /method actually used: SYNTH-method-bpsys-manual · provenance actor: prsn_SYNTH-person-0001/i,
+    ),
+  ).toBeVisible();
+  await expect(recorded.getByText("Partial", { exact: true })).toBeVisible();
+  await expect(recorded.getByText(/saved as-is — never silently upgraded/i)).toBeVisible();
+  await expect(recorded.getByText(/SYNTH-CAP-\d{6}/)).toBeVisible();
+
+  // 10. The capture history (same store, read through the route) shows the
+  //     new observation with method/quality/provenance badges.
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Recent manual observations" }),
+  ).toBeVisible();
+  const table = page.getByRole("table");
+  await expect(table).toBeVisible();
+  await expect(table.getByText("Blood pressure 118/76 mmHg")).toBeVisible();
+  await expect(table.getByText("Manual", { exact: true })).toBeVisible();
+  await expect(table.getByText("You (self-tracking)", { exact: true })).toBeVisible();
+  await expect(table.getByText(/Today, \d{2}:\d{2}/)).toBeVisible();
+
+  // The per-row disclosure reveals the provenance drawer.
+  const detailsToggle = page.getByRole("button", { name: /Details: SYNTH-CAP-/ });
+  await detailsToggle.click();
+  await expect(page.getByText("Provenance actor", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("You (SYNTH-Person-1, self-tracking)", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Method actually used", { exact: true })).toBeVisible();
+  await expect(page.getByText("SYNTH-method-bpsys-manual", { exact: true })).toBeVisible();
+  await expect(page.getByText(/self-assessed; never upgraded/)).toBeVisible();
+
+  // 11. Record a second capture with a LOW QUALITY self-assessment — the
+  //     history badges must reflect the recorded state, not upgrade it.
+  await page.getByRole("button", { name: "Record another measurement" }).click();
+  await expect(page.getByText("Step 1 of 3 — choose what you measured")).toBeVisible();
+  await page
+    .getByRole("radiogroup", { name: /what did you measure\?/i })
+    .getByText("Heart rate", { exact: true })
+    .click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByText("Manual pulse check", { exact: true }).click();
+  await page.getByLabel(/heart rate \(heart rate\)/i).fill("64");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page
+    .getByRole("radiogroup", { name: /quality self-assessment/i })
+    .getByText("Low quality", { exact: true })
+    .click();
+  await page.getByRole("button", { name: "Save measurement" }).click();
+
+  await expect(recorded.getByText("Measurement saved.", { exact: true })).toBeVisible();
+  await expect(
+    recorded.getByText(/Heart rate 64 beats\/min — via Manual pulse check/),
+  ).toBeVisible();
+  await expect(recorded.getByText("Low quality", { exact: true })).toBeVisible();
+  await expect(
+    recorded.getByText(
+      /method actually used: SYNTH-method-hr-manual · provenance actor: prsn_SYNTH-person-0001/i,
+    ),
+  ).toBeVisible();
+
+  // Both captures are in the history; the recorded qualities differ (never
+  // upgraded).
+  await expect(table.getByText("Blood pressure 118/76 mmHg")).toBeVisible();
+  await expect(table.getByText("Heart rate 64 beats/min")).toBeVisible();
+  await expect(page.getByRole("row")).toHaveCount(3); // header + 2 captures
+  await expect(table.getByText("Partial", { exact: true })).toBeVisible();
+  await expect(table.getByText("Low quality", { exact: true })).toBeVisible();
+
+  // 12. The timeline view groups the same records by day with polite
+  //     announcements (the DataBox view-toggle pattern).
+  await page.getByRole("button", { name: "Timeline" }).click();
+  await expect(table).toHaveCount(0);
+  await expect(page.getByText("Showing the capture history timeline.")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "History list" }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: "Timeline" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByText("Today", { exact: true })).toBeVisible();
+  await expect(page.getByText(/quality: Partial · recorded by you/i)).toBeVisible();
+  await expect(page.getByText(/quality: Low quality · recorded by you/i)).toBeVisible();
+
+  // Back to the list view.
+  await page.getByRole("button", { name: "History list" }).click();
+  await expect(table).toBeVisible();
+  await expect(page.getByText("Showing the capture history list.")).toBeVisible();
 });

@@ -6,7 +6,6 @@ import {
   SYNTHETIC_EVIDENCE_ITEMS,
   SYNTHETIC_LATEST_HEART_RATE,
   SYNTHETIC_METRIC,
-  SYNTHETIC_METHOD_OPTIONS,
   SYNTHETIC_OBSERVATION_EVENTS,
   SYNTHETIC_RESTING_HEART_RATE_SERIES,
   buildSyntheticTimelineEntries,
@@ -93,15 +92,6 @@ describe("synthetic measurement fixtures", () => {
       expect(value).toBeLessThanOrEqual(SYNTHETIC_METRIC.max);
     }
     expect(SYNTHETIC_LATEST_HEART_RATE).toBe(60);
-  });
-
-  it("uses at least two capture methods with SYNTH ids, least-burden first", () => {
-    expect(SYNTHETIC_METHOD_OPTIONS.length).toBeGreaterThanOrEqual(2);
-    for (const option of SYNTHETIC_METHOD_OPTIONS) {
-      expect(option.id.startsWith("SYNTH-")).toBe(true);
-      expect(option.label.length).toBeGreaterThan(0);
-    }
-    expect(SYNTHETIC_METHOD_OPTIONS[0]?.id).toBe("SYNTH-method-pulse");
   });
 
   it("keeps bar chart counts non-negative with short labels", () => {
