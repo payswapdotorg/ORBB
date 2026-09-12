@@ -1,10 +1,10 @@
 # ORBB Orchestration Status
 
-current_milestone: M4 — measurement engine (dispatching)
+current_milestone: M4 — measurement engine (1/3 landed; m4-b generating)
 architecture_status: FROZEN FOR IMPLEMENTATION
-implementation_status: M0 + M1 + M2 + M3 COMPLETE (PRs #4-#15)
+implementation_status: M0 + M1 + M2 + M3 COMPLETE (PRs #4-#15); M4-A MERGED (PR #16)
 active_worker_slots: 0/3 (m3-b queued, hard-frozen per lesson 16 after usage-limit detection)
-latest_green_commit: 9d74cd9 (Merge PR #15: M3-B web shell II)
+latest_green_commit: a2a404c (Merge PR #16: M4-A measurement engine core)
 preview_url: none (Vercel preview pending operator account link; web shell dogfooded locally by lead)
 last_dogfood: 2026-09-10 18:5x UTC — lead exercised the web shell end-to-end (role switch, emphasis, DataBox journey; VLM-verified screenshots)
 last_audit: 2026-09-10 — session audit by resident tech lead
@@ -37,7 +37,8 @@ merged_in_M2:
 - M2 EXIT verified on fresh main 1eca964: frozen install 0, lint 16/16, typecheck 16/16, test 785 passed | 3 DATABASE_URL-gated skips, build 14/14; journey.test.ts explicitly green (upload -> finalize -> retrieval -> audit end-to-end with synthetic data — the M2 exit criterion). Transit note: migration SQL arrived chat-mangled (smart primes/zero-width/identifier reflow); repaired at the integration station against schema.ts ground truth — all 9 drift guards green, PGlite executes the real SQL in every db test.
 
 in_flight:
-- M4-A (measurement engine core: catalog/capabilities/plan compiler/scheduler/quality states), M4-B (manual capture UX web+mobile), M4-C (device-source seams + exit harness) — dispatching after the M3 STATUS commit.
+- M4-B (manual capture UX web+mobile, /c/b96aa083): GENERATING (serial dispatch — usage window admits one heavy generation at a time in this regime).
+- M4-C (device-source seams + exit harness): queued behind M4-B.
 
 merged_in_M3:
 - M3-C (PR #13, Lane C): @orbb/auth — SessionService (opaque hashed tokens, atomic rotate), dependency-free WebAuthn (hand-written CBOR, ES256/Ed25519/RS256, none+packed attestation, signCount clone detection), email OTP (single-use/TTL/throttle), recovery codes (hashed, timingSafeEqual), Upstash REST rate-limit adapter (SHAPE-VERIFIED via fetch stub, fail-closed, parity-tested vs in-memory), AccountService seams; zero external runtime deps; 147 tests; lockfile +16/-3.
@@ -48,7 +49,10 @@ merged_in_M3 (completion):
 - M3-B (PR #15, Lane B): apps/web DataBox journey on the design system — Evidence Table (sortable, pure sort fn) + DisclosurePanel metadata, Evidence Timeline, Sparkline+BarChart summary card, ConsentSheet share-with-clinician flow (focus trap, reduced motion, i18n overrides), measurement capture form (ValueInput/MethodPicker/DueWindow/FieldWrapper) -> API route stub with typed echo, clinician emphasis aria-live integration; Playwright journeys extended (4 e2e green: evidence/consent/measurement); web unit 8 -> 65 tests; zero new runtime deps; SYNTH-only fixtures.
 - M3 EXIT verified on fresh main 9d74cd9: frozen install 0, lint 16/16, typecheck 16/16, test 16/16, build 14/14; cross-person existence-secrecy explicitly tested on all person-scoped resources (intents.test.ts:170, evidence.test.ts:59, observations.test.ts:195 — "404 (not 403) for another person's..."), api suite 85/85. Transit: sandbox files-API tarball harvest, sha256 byte-verified (6d6ba578...).
 
+merged_in_M4:
+- M4-A (PR #16, Lane A): @orbb/measurement engine core — MetricCatalog with versioned supersession (A27), MeasurementMethodRegistry + deny-by-default CapabilityIndex (A28), deterministic ProtocolDefinition->Plan compiler (A29), idempotent TaskScheduler with UTC window math + missed-window roll-forward/backfill (A30), AttemptRecorder with completion quality states + method fallback (A31), same-metric multi-source reconciliation with per-source provenance (M4 exit seam); interface-driven (injected stores/registries/clock/id-factory, zero db imports); 93 tests; lockfile +6 (@orbb/testkit devDep). Transit: sandbox tarball byte-verified (sha256 536769d7...).
+
 next_dispatch:
-- M4 packets (m4-a-engine / m4-b-capture / m4-c-devices) at base 9d74cd9+STATUS; M4 exit: "a real supported metric can be acquired by at least two methods and reconciled with provenance" (harness in M4-C).
+- M4-B landing cycle -> M4-C dispatch; M4 exit: "a real supported metric can be acquired by at least two methods and reconciled with provenance" (harness in M4-C).
 
 Do not mark this file green until actual code, tests, and preview verification exist.
