@@ -1,0 +1,25 @@
+{
+  "name": "@orbb/intents",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Intent compiler core for ORBB (M5-A Lane A): typed EvidencePack schema with content-addressed PHI-free summary entries, canonical deterministic serialization with content hashing and append-only versioning (A36); EvidencePack registry port with MetricCatalog-mirroring supersession semantics, per-version provenance and deny-by-default typed rejections (A37); and the pure, deterministic IntentCompiler expanding a goal + constraints plus the ACTIVE EvidencePack version into burden-ordered draft plan candidates with structured explainability audit trails (A38). Interface-driven: injected registry/catalog/method-index/clock/id-factory; engine wiring to @orbb/measurement arrives at integration (handoff recorded). Output plans are DRAFTS ONLY — publication stays a frozen domain transition.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "@orbb/domain": "workspace:*",
+    "@orbb/testkit": "workspace:*",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}
