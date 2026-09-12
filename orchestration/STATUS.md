@@ -1,10 +1,10 @@
 # ORBB Orchestration Status
 
-current_milestone: M4 — measurement engine (1/3 landed; m4-b generating)
+current_milestone: M5 — intent compiler (dispatching)
 architecture_status: FROZEN FOR IMPLEMENTATION
-implementation_status: M0 + M1 + M2 + M3 COMPLETE (PRs #4-#15); M4-A MERGED (PR #16)
+implementation_status: M0 + M1 + M2 + M3 + M4 COMPLETE (PRs #4-#18)
 active_worker_slots: 0/3 (m3-b queued, hard-frozen per lesson 16 after usage-limit detection)
-latest_green_commit: a2a404c (Merge PR #16: M4-A measurement engine core)
+latest_green_commit: b7ee95d (Merge PR #18: M4-C device-source seams + exit harness)
 preview_url: none (Vercel preview pending operator account link; web shell dogfooded locally by lead)
 last_dogfood: 2026-09-10 18:5x UTC — lead exercised the web shell end-to-end (role switch, emphasis, DataBox journey; VLM-verified screenshots)
 last_audit: 2026-09-10 — session audit by resident tech lead
@@ -37,8 +37,7 @@ merged_in_M2:
 - M2 EXIT verified on fresh main 1eca964: frozen install 0, lint 16/16, typecheck 16/16, test 785 passed | 3 DATABASE_URL-gated skips, build 14/14; journey.test.ts explicitly green (upload -> finalize -> retrieval -> audit end-to-end with synthetic data — the M2 exit criterion). Transit note: migration SQL arrived chat-mangled (smart primes/zero-width/identifier reflow); repaired at the integration station against schema.ts ground truth — all 9 drift guards green, PGlite executes the real SQL in every db test.
 
 in_flight:
-- M4-B (manual capture UX web+mobile, /c/b96aa083): GENERATING (serial dispatch — usage window admits one heavy generation at a time in this regime).
-- M4-C (device-source seams + exit harness): queued behind M4-B.
+- M5 wave (m5-a-intents EvidencePack+compiler / m5-b-optimizer burden+matching+safety / m5-c-review AI seam+review workflow+exit harness) — dispatching serially after the M4 STATUS commit.
 
 merged_in_M3:
 - M3-C (PR #13, Lane C): @orbb/auth — SessionService (opaque hashed tokens, atomic rotate), dependency-free WebAuthn (hand-written CBOR, ES256/Ed25519/RS256, none+packed attestation, signCount clone detection), email OTP (single-use/TTL/throttle), recovery codes (hashed, timingSafeEqual), Upstash REST rate-limit adapter (SHAPE-VERIFIED via fetch stub, fail-closed, parity-tested vs in-memory), AccountService seams; zero external runtime deps; 147 tests; lockfile +16/-3.
@@ -52,7 +51,14 @@ merged_in_M3 (completion):
 merged_in_M4:
 - M4-A (PR #16, Lane A): @orbb/measurement engine core — MetricCatalog with versioned supersession (A27), MeasurementMethodRegistry + deny-by-default CapabilityIndex (A28), deterministic ProtocolDefinition->Plan compiler (A29), idempotent TaskScheduler with UTC window math + missed-window roll-forward/backfill (A30), AttemptRecorder with completion quality states + method fallback (A31), same-metric multi-source reconciliation with per-source provenance (M4 exit seam); interface-driven (injected stores/registries/clock/id-factory, zero db imports); 93 tests; lockfile +6 (@orbb/testkit devDep). Transit: sandbox tarball byte-verified (sha256 536769d7...).
 
+merged_in_M4:
+- M4-A (PR #16, Lane A): @orbb/measurement engine core — MetricCatalog/versioned supersession, MethodRegistry+CapabilityIndex deny-by-default, deterministic PlanCompiler, idempotent TaskScheduler (UTC window math, roll-forward/backfill), AttemptRecorder quality states, multi-source reconciliation; interface-driven; 93 tests.
+- M4-B (PR #17, Lane B): manual capture UX — web capture flow (SYNTH catalog->method->per-metric values->review with quality self-assessment->typed API stub), capture history (Table+Disclosure+Timeline), measurements workspace; mobile capture/history/health screens with offline-tolerant queue; maestro flows; supersedes M3-B form stubs (5 files git rm); web unit 65->123, mobile libs 23.
+- M4-C (PR #18, Lane C): @orbb/platform health seam — MeasurementSourceRegistry+DeviceSourceAdapter (A32), HealthKitAdapter (A34) + HealthConnectAdapter (A35) TS seams with synthetic native doubles, Expo config-plugin surface, unit-conversion-at-normalization with provenance; platform 22->96 tests.
+- M4 EXIT verified on fresh main b7ee95d: all gates 0; m4-exit-harness.test.ts green — heart rate acquired by TWO methods (manual + device adapter) reconciled into one canonical observation view with per-source provenance, deterministic replay.
+- All three delivered via byte-verified sandbox tarball harvests (sha256: 536769d7 / e934a98b / 223f438d).
+
 next_dispatch:
-- M4-B landing cycle -> M4-C dispatch; M4 exit: "a real supported metric can be acquired by at least two methods and reconciled with provenance" (harness in M4-C).
+- M5 packets (m5-a/m5-b/m5-c at base b7ee95d+STATUS); M5 exit: "at least three intents generate explainable plans from versioned EvidencePacks; no plan executes before publication" (harness in M5-C).
 
 Do not mark this file green until actual code, tests, and preview verification exist.
