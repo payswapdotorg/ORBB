@@ -20,6 +20,7 @@ import {
 } from "../lib/capture/offline-queue";
 import { CaptureForm } from "./capture-form";
 import { CaptureHistory } from "./capture-history";
+import { IntentJourney } from "./intent-journey";
 
 /**
  * Health surface (M4-B): the manual capture journey lands on the Health
@@ -212,6 +213,12 @@ export function HealthScreen() {
       <CaptureForm onSubmit={handleSubmit} />
 
       <CaptureHistory records={records} now={now} />
+
+      {/* M6-A: the intent journey (create -> review candidate plan ->
+          approve/reject) lands below the capture journey on the Health
+          tab — the same surface "Your intents, measurement plans, and
+          observations". */}
+      <IntentJourney />
 
       <Text style={styles.footnote}>
         Synthetic journey — no real medical data, no real credentials, no

@@ -1,0 +1,51 @@
+# M6-A onboarding journey (Lane B): the first-run flow on the Today tab —
+# welcome, persona selection (the emphasis-model role vocabulary), metric
+# interests (M4-B SYNTH catalog), the source registration summary (manual
+# registered; device/app seams display-only), and completion.
+#
+# All asserted strings are SYNTH-marked or architectural labels; nothing
+# here is or resembles real PHI.
+#
+# MAESTRO_APP_ID: the target app id on the device/emulator
+# (dev build: org.orbb.mobile; or the Expo Go host package id).
+appId: ${MAESTRO_APP_ID}
+name: ORBB onboarding journey (M6-A)
+tags:
+  - M6
+  - onboarding
+---
+- launchApp
+
+# The first-run journey renders on the Today tab.
+- assertVisible: "Welcome to ORBB"
+- assertVisible: "Onboarding — step 1 of 5: welcome"
+- tapOn: "Get started"
+
+# Step 2 — persona: pick the Person persona (emphasis-model vocabulary).
+- assertVisible: "Onboarding — step 2 of 5: choose how you will use ORBB"
+- tapOn:
+    text: "Person — tracking my own health"
+- tapOn: "Continue"
+
+# Step 3 — metric interests: pick two metrics from the synthetic catalog.
+- assertVisible: "Onboarding — step 3 of 5: pick metrics you care about"
+- tapOn:
+    text: "Blood pressure"
+- tapOn:
+    text: "Sleep duration"
+- assertVisible: "2 metrics selected."
+- tapOn: "Continue"
+
+# Step 4 — source registration summary (display only).
+- assertVisible: "Onboarding — step 4 of 5: review your measurement sources"
+- assertVisible: "Registered · active"
+- assertVisible: "Not connected yet"
+- tapOn: "Continue"
+
+# Step 5 — done: the summary echoes the choices; completion is terminal.
+- assertVisible: "Onboarding — step 5 of 5: finish setup"
+- assertVisible: "Person — tracking my own health"
+- tapOn: "Finish setup"
+
+# After completion the Today placeholder returns (session-scoped record).
+- assertVisible: "Coming in M6+"
