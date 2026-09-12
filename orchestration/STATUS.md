@@ -1,10 +1,10 @@
 # ORBB Orchestration Status
 
-current_milestone: M5 — intent compiler (dispatching)
+current_milestone: M6 — consumer product (dispatching)
 architecture_status: FROZEN FOR IMPLEMENTATION
-implementation_status: M0 + M1 + M2 + M3 + M4 COMPLETE (PRs #4-#18)
+implementation_status: M0-M5 COMPLETE (PRs #4-#21); 18 PRs total
 active_worker_slots: 0/3 (m3-b queued, hard-frozen per lesson 16 after usage-limit detection)
-latest_green_commit: b7ee95d (Merge PR #18: M4-C device-source seams + exit harness)
+latest_green_commit: 175d7e1 (Merge PR #21: M5-C AI seam + review workflow + exit harness)
 preview_url: none (Vercel preview pending operator account link; web shell dogfooded locally by lead)
 last_dogfood: 2026-09-10 18:5x UTC — lead exercised the web shell end-to-end (role switch, emphasis, DataBox journey; VLM-verified screenshots)
 last_audit: 2026-09-10 — session audit by resident tech lead
@@ -37,7 +37,7 @@ merged_in_M2:
 - M2 EXIT verified on fresh main 1eca964: frozen install 0, lint 16/16, typecheck 16/16, test 785 passed | 3 DATABASE_URL-gated skips, build 14/14; journey.test.ts explicitly green (upload -> finalize -> retrieval -> audit end-to-end with synthetic data — the M2 exit criterion). Transit note: migration SQL arrived chat-mangled (smart primes/zero-width/identifier reflow); repaired at the integration station against schema.ts ground truth — all 9 drift guards green, PGlite executes the real SQL in every db test.
 
 in_flight:
-- M5 wave (m5-a-intents EvidencePack+compiler / m5-b-optimizer burden+matching+safety / m5-c-review AI seam+review workflow+exit harness) — dispatching serially after the M4 STATUS commit.
+- M6 wave (consumer product B1-B10: onboarding, intent creation, plan review, today/task flow, observation/provenance detail, DataBox timeline/search, sharing/revocation UX, notification engine, consent settings, adherence abstraction) — packetizing.
 
 merged_in_M3:
 - M3-C (PR #13, Lane C): @orbb/auth — SessionService (opaque hashed tokens, atomic rotate), dependency-free WebAuthn (hand-written CBOR, ES256/Ed25519/RS256, none+packed attestation, signCount clone detection), email OTP (single-use/TTL/throttle), recovery codes (hashed, timingSafeEqual), Upstash REST rate-limit adapter (SHAPE-VERIFIED via fetch stub, fail-closed, parity-tested vs in-memory), AccountService seams; zero external runtime deps; 147 tests; lockfile +16/-3.
@@ -58,7 +58,14 @@ merged_in_M4:
 - M4 EXIT verified on fresh main b7ee95d: all gates 0; m4-exit-harness.test.ts green — heart rate acquired by TWO methods (manual + device adapter) reconciled into one canonical observation view with per-source provenance, deterministic replay.
 - All three delivered via byte-verified sandbox tarball harvests (sha256: 536769d7 / e934a98b / 223f438d).
 
+merged_in_M5:
+- M5-A (PR #19, Lane A): packages/intents — EvidencePack schema (A36: content-addressed summaries, canonical-JSON serialization, append-only versioning), registry (A37: lineage + provenance, deny-by-default), deterministic IntentCompiler (A38: explainability audit trails, drafts only); 76 tests.
+- M5-B (PR #20, Lane A): BurdenOptimizer (A39: Pareto-minimal under burden/coverage, deterministic tie-breaks), ResourceMatcher (A40: source+coverage gating with typed drop reasons), SafetyRuleEngine (A41: data-driven rules, PASS|ESCALATE|REJECT, ESCALATE-never-publishes type-encoded); intents 161 tests.
+- M5-C (PR #21, Lane C): ProposalService seam (A42: SYNTH deterministic double, model provenance, no decision authority), ReviewWorkflow (A43: frozen domain draft->published transition, full audit trail, nothing publishes without review — type-encoded); intents 180 tests.
+- M5 EXIT verified on fresh main 175d7e1: all gates 0; m5-exit-harness.test.ts 19/19 — THREE intents (manage-blood-pressure / increase-activity / improve-sleep) generate explainable plans from versioned EvidencePacks; audit trail proves pack lineage + published-only states + review traceability; deterministic replay. No plan executes before publication.
+- All deliveries byte-verified sandbox tarballs (sha256: 753ec0b1 / 39a5d2f8 / 491b7464); one lesson-10 continuation nudge revived a stalled m5-a turn.
+
 next_dispatch:
-- M5 packets (m5-a/m5-b/m5-c at base b7ee95d+STATUS); M5 exit: "at least three intents generate explainable plans from versioned EvidencePacks; no plan executes before publication" (harness in M5-C).
+- M6 packets (B1-B10 by lane: web/mobile UX + notification engine + adherence abstraction); exit: golden journeys #1 #2 #4 #7 pass on web + supported mobile paths.
 
 Do not mark this file green until actual code, tests, and preview verification exist.
