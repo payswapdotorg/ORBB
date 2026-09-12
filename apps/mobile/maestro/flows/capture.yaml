@@ -1,0 +1,64 @@
+# M4-B manual capture journey (Lane B): the full person-mode flow on the
+# Health tab — pick the metric from the seeded synthetic catalog, pick the
+# manual method, enter the compound blood-pressure values, review, pick a
+# quality self-assessment, submit, and see the visible confirmation plus
+# the record in the recent-observations history with its provenance.
+#
+# All asserted strings are SYNTH-marked or architectural labels; nothing
+# here is or resembles real PHI.
+#
+# MAESTRO_APP_ID: the target app id on the device/emulator
+# (dev build: org.orbb.mobile; or the Expo Go host package id).
+appId: ${MAESTRO_APP_ID}
+name: ORBB capture journey (M4-B)
+tags:
+  - M4
+  - capture
+---
+- launchApp
+
+# Enter the Health surface (the M4-B capture journey's home tab).
+- tapOn: "Health"
+- assertVisible: "Record a measurement"
+- assertVisible: "Step 1 of 3"
+
+# Step 1 — WHAT: pick the compound metric from the synthetic catalog.
+- tapOn: "Blood pressure"
+- tapOn: "Continue"
+- assertVisible: "Step 2 of 3"
+
+# Step 2 — HOW + VALUES: pick the manual method (the only enabled route;
+# future device/app routes render disabled), then the two values.
+- tapOn: "Manual entry — home BP cuff reading"
+- tapOn:
+    text: "Systolic value"
+- inputText: "118"
+- tapOn:
+    text: "Diastolic value"
+- inputText: "76"
+- hideKeyboard
+- tapOn: "Continue"
+
+# Step 3 — REVIEW: summary plus the quality self-assessment control.
+- assertVisible: "Review"
+- assertVisible: "Systolic: 118 mmHg"
+- assertVisible: "Diastolic: 76 mmHg"
+- assertVisible: "SYNTH-method-bpsys-manual, SYNTH-method-bpdia-manual"
+
+# Self-assess as Partial (recorded as-is — never upgraded) and submit.
+- tapOn: "Partial"
+- tapOn: "Save measurement"
+
+# Visible confirmation with the value, the provenance actor (the person —
+# self-tracking) and the recorded quality.
+- assertVisible: "Measurement saved"
+- assertVisible: "118/76 mmHg"
+- assertVisible: "recorded by you (self-tracking)"
+- assertVisible: "Quality recorded as partial (never upgraded)"
+
+# The history list shows the new observation with badges and provenance.
+- assertVisible: "Recent manual observations"
+- assertVisible: "Blood pressure 118/76 mmHg"
+- assertVisible: "Manual"
+- assertVisible: "Method actually used: SYNTH-method-bpsys-manual, SYNTH-method-bpdia-manual"
+- assertVisible: "validation: pending"

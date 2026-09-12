@@ -1,4 +1,4 @@
-import type { BarChartDatum, MethodOption, TimelineEntry } from "@orbb/ui";
+import type { BarChartDatum, TimelineEntry } from "@orbb/ui";
 
 /**
  * Synthetic fixtures for the M3-B DataBox journey (web shell).
@@ -247,7 +247,7 @@ export function buildSyntheticTimelineEntries(): readonly TimelineEntry[] {
     .map((item) => item.entry);
 }
 
-/** The synthetic metric the M3-B measurement capture form records. */
+/** The synthetic metric the measurement summary card charts (M3-B). */
 export interface SyntheticMetric {
   readonly id: string;
   readonly label: string;
@@ -255,10 +255,6 @@ export interface SyntheticMetric {
   readonly min: number;
   readonly max: number;
   readonly step: number;
-  /** Due-window label for the task card badge. */
-  readonly dueLabel: string;
-  /** Reason line for the task card (measurement task UX contract). */
-  readonly reason: string;
 }
 
 export const SYNTHETIC_METRIC: SyntheticMetric = {
@@ -268,37 +264,7 @@ export const SYNTHETIC_METRIC: SyntheticMetric = {
   min: 30,
   max: 220,
   step: 1,
-  dueLabel: "Due by 09:00",
-  reason: "Supports your synthetic monitoring plan for the resting heart rate intent.",
 };
-
-/**
- * Capture methods for the synthetic resting-heart-rate task, ordered
- * least-burden first (architecture: show the least-burden valid option
- * first, not the most technologically impressive one).
- */
-export const SYNTHETIC_METHOD_OPTIONS: readonly MethodOption[] = [
-  {
-    id: "SYNTH-method-pulse",
-    label: "Manual pulse check",
-    meta: "Manual · ~1 min · private",
-  },
-  {
-    id: "SYNTH-method-wearable",
-    label: "Wearable sync",
-    meta: "Device · automatic · private",
-  },
-  {
-    id: "SYNTH-method-clinic",
-    label: "Clinic measurement",
-    meta: "Assisted · scheduled · shared with care team",
-  },
-];
-
-/** Returns the human label for a synthetic method id. */
-export function syntheticMethodLabel(methodId: string): string {
-  return SYNTHETIC_METHOD_OPTIONS.find((option) => option.id === methodId)?.label ?? methodId;
-}
 
 /**
  * Synthetic resting-heart-rate series for the measurement summary

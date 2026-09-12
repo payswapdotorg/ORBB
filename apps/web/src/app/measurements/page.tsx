@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Heading, Text } from "@orbb/ui";
-import { MeasurementCaptureForm } from "@/components/measurements/measurement-capture-form";
-import { MeasurementSummaryCard } from "@/components/measurements/measurement-summary-card";
+import { MeasurementsWorkspace } from "@/components/measurements/measurements-workspace";
 import { RoleSurfaceNotice } from "@/components/role-surface-notice";
 
 export const metadata: Metadata = {
@@ -9,11 +8,13 @@ export const metadata: Metadata = {
 };
 
 /**
- * Measurements surface (M3-B): the M0 placeholder is now a real surface —
- * the measurement summary card (Sparkline + BarChart over synthetic data)
- * and the "Record a measurement" capture form (`ValueInput` +
- * `MethodPicker` + `DueWindow` behind `FieldWrapper` wiring) submitting to
- * the local route-handler stub. Everything is synthetic (SYNTH).
+ * Measurements surface (M4-B): the manual capture journey is now
+ * first-class — a three-step "Record a measurement" flow (metric → method
+ * → values/context → review with quality self-assessment → submit to the
+ * `/api/capture` route stub with an in-memory store) plus the recent
+ * manual-observations history (table + timeline) reading the same store.
+ * The measurement summary card (Sparkline + BarChart over synthetic data)
+ * stays from M3-B. Everything is synthetic (SYNTH).
  */
 export default function MeasurementsPage() {
   return (
@@ -25,8 +26,7 @@ export default function MeasurementsPage() {
         </Text>
       </div>
       <RoleSurfaceNotice surface="measurements" />
-      <MeasurementSummaryCard />
-      <MeasurementCaptureForm />
+      <MeasurementsWorkspace />
       <p className="m-0 text-xs text-fg-muted">
         Everything on this screen is synthetic (SYNTH) — no real medical
         data, no real credentials, nothing is persisted.
