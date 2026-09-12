@@ -1,0 +1,88 @@
+# M6-A intent creation + plan review journey (Lane B): the golden journey
+# #1 head on the Health tab — create an intent (goal + constraints against
+# the evidence pack), receive the candidate plan, review the
+# explainability audit trail + burden + safety outcome, and approve with
+# edits through the local model's domain transition.
+#
+# All asserted strings are SYNTH-marked or architectural labels; nothing
+# here is or resembles real PHI.
+#
+# MAESTRO_APP_ID: the target app id on the device/emulator
+# (dev build: org.orbb.mobile; or the Expo Go host package id).
+appId: ${MAESTRO_APP_ID}
+name: ORBB intent journey (M6-A)
+tags:
+  - M6
+  - intents
+---
+- launchApp
+
+# Enter the Health surface (the intent journey's home tab). If the app is
+# on a fresh install, complete the onboarding prefix first (the Today tab
+# runs the first-run journey); on a resumed session this is a no-op.
+- runFlow:
+    when:
+      visible: "Welcome to ORBB"
+    commands:
+      - tapOn: "Get started"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Finish setup"
+
+- tapOn: "Health"
+- assertVisible: "Health intents"
+- assertVisible: "Create a health intent"
+- assertVisible: "Step 1 of 3 — choose your goal"
+
+# Step 1 — GOAL: pick the metric, direction, and target.
+- tapOn:
+    text: "Blood Pressure Systolic"
+- tapOn:
+    text: "Lower"
+- tapOn:
+    text: "Blood Pressure Systolic target value"
+- inputText: "120"
+- hideKeyboard
+- tapOn: "Continue"
+
+# Step 2 — CONSTRAINTS: cadence + method preference, with the evidence
+# pack coverage summary rendered inline.
+- assertVisible: "Step 2 of 3 — constraints and evidence"
+- assertVisible: "Your evidence pack"
+- assertVisible: "12 obs · MEASURED"
+- tapOn:
+    text: "Daily"
+- tapOn:
+    text: "Any available method"
+- tapOn: "Continue"
+
+# Step 3 — REVIEW + create: the objective summary.
+- assertVisible: "Step 3 of 3 — review and create"
+- assertVisible: "Lower Blood Pressure Systolic toward 120 mmHg."
+- tapOn: "Create intent"
+
+# PLAN REVIEW — the candidate plan received: explainability audit trail,
+# burden summary, safety PASS badge, and the matcher's no-source drop.
+- assertVisible: "Review the candidate plan"
+- assertVisible: "Why this plan (audit trail)"
+- assertVisible: "12 observations via SYNTH-method-bpsys-manual"
+- assertVisible: "Safety outcome: PASS"
+- assertVisible: "Burden summary"
+- assertVisible: "3 units/day"
+- assertVisible: "Dropped by the matcher"
+- assertVisible: "SYNTH-method-cuff-bp-panel"
+
+# Approve with edits: a reviewer note rides the approval; the domain
+# transition publishes the plan and the outcome is announced.
+- tapOn:
+    text: "Reviewer note"
+- inputText: "approved on mobile"
+- hideKeyboard
+- tapOn: "Approve with edits"
+- assertVisible: "Plan published"
+- assertVisible: "approved on mobile"
+- assertVisible: "state published"
+- tapOn: "Create another intent"
+- assertVisible: "Step 1 of 3 — choose your goal"
