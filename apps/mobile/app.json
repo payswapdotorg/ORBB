@@ -7,6 +7,9 @@
     "userInterfaceStyle": "light",
     "scheme": "orbb",
     "platforms": ["ios", "android"],
+    "plugins": [
+      "./plugins/orbb-health-plugin"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdSuffix": ".orbb"
@@ -14,6 +17,6 @@
     "android": {
       "package": "org.orbb.mobile"
     },
-    "_comment": "Synthetic M0 shell. No API keys, no credentials, no real medical data. CI typechecks only — no native build is produced at M0."
+    "_comment": "Synthetic M0 shell. No API keys, no credentials, no real medical data. CI typechecks only — no native build is produced at M0. M4-C: the orbb-health-plugin registers the HealthKit Info.plist usage descriptions (TEXT ONLY) and the Health Connect manifest permissions (TEXT ONLY) for the @orbb/platform device-source seams; native bindings arrive with the deployment/mobile-integration milestone."
   }
 }

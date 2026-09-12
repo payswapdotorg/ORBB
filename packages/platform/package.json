@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Deployment adapter interfaces and environment matrix for ORBB (architecture provider map): WebHost, HttpRuntime, EventBus/JobRunner, ObjectStore, SqlStore, Cache/RateLimiter. Pure TypeScript — zero runtime dependencies, no provider SDK imports. In-memory reference implementations exist ONLY for Cache/RateLimiter (test use).",
+  "description": "Deployment adapter interfaces and environment matrix for ORBB (architecture provider map): WebHost, HttpRuntime, EventBus/JobRunner, ObjectStore, SqlStore, Cache/RateLimiter — plus the device-source health seam (Lane C packet M4-C, A32/A34/A35): MeasurementSourceRegistry, DeviceSourceAdapter, HealthKit/Health Connect TypeScript seams with synthetic native doubles, and the M4 exit harness scaffolding. Pure TypeScript over the frozen @orbb/domain contracts and the @orbb/observability logger — no provider SDK imports, workspace dependencies only. In-memory reference implementations exist ONLY for Cache/RateLimiter (test use) and the health-seam doubles.",
   "main": "./dist/index.js",
   "types": "./src/index.ts",
   "scripts": {
@@ -12,8 +12,13 @@
     "test": "vitest run",
     "build": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "@orbb/domain": "workspace:*",
+    "@orbb/observability": "workspace:*"
+  },
   "devDependencies": {
     "@eslint/js": "^9.30.0",
+    "@orbb/testkit": "workspace:*",
     "eslint": "^9.30.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.30.0",
