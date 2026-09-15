@@ -1,13 +1,13 @@
 # ORBB Orchestration Status
 
-current_milestone: M6 — consumer product (dispatching)
+current_milestone: M6 — consumer product (B4-B10 remaining; B1-B3 COMPLETE)
 architecture_status: FROZEN FOR IMPLEMENTATION
-implementation_status: M0-M5 COMPLETE (PRs #4-#21); 18 PRs total
-active_worker_slots: 0/3 (m3-b queued, hard-frozen per lesson 16 after usage-limit detection)
-latest_green_commit: 175d7e1 (Merge PR #21: M5-C AI seam + review workflow + exit harness)
+implementation_status: M0-M5 COMPLETE (PRs #4-#21); M6-A COMPLETE (PR #22); 19 PRs total
+active_worker_slots: 0/3 (M6-B wave packetizing: B4-B6 Lane B, B8 Lane A, B10 Lane C)
+latest_green_commit: 55761c8 (M6-A: consumer product I — PR #22)
 preview_url: none (Vercel preview pending operator account link; web shell dogfooded locally by lead)
 last_dogfood: 2026-09-10 18:5x UTC — lead exercised the web shell end-to-end (role switch, emphasis, DataBox journey; VLM-verified screenshots)
-last_audit: 2026-09-10 — session audit by resident tech lead
+last_audit: 2026-09-15 — repo-truth audit by resident tech lead (STATUS resynced to merged PR #22; was stale pre-merge)
 
 milestone_M0_evidence:
 - PR #4 (M0-A, Lane A): 8 packages, 86 tests. CI green.
@@ -37,7 +37,13 @@ merged_in_M2:
 - M2 EXIT verified on fresh main 1eca964: frozen install 0, lint 16/16, typecheck 16/16, test 785 passed | 3 DATABASE_URL-gated skips, build 14/14; journey.test.ts explicitly green (upload -> finalize -> retrieval -> audit end-to-end with synthetic data — the M2 exit criterion). Transit note: migration SQL arrived chat-mangled (smart primes/zero-width/identifier reflow); repaired at the integration station against schema.ts ground truth — all 9 drift guards green, PGlite executes the real SQL in every db test.
 
 in_flight:
-- M6 wave (consumer product B1-B10: onboarding, intent creation, plan review, today/task flow, observation/provenance detail, DataBox timeline/search, sharing/revocation UX, notification engine, consent settings, adherence abstraction) — packetizing.
+- M6-B wave (dispatching 2026-09-15): B4 Today/task flow + B5 observation/provenance detail + B6 DataBox timeline/search (Lane B); B8 notification/reminder engine (Lane A); B10 adherence enforcement abstraction + OS capabilities (Lane C).
+
+merged_in_M6:
+- M6-A (PR #22, Lane B): B1 onboarding + B2 intent creation + B3 plan review — first-run journey (persona/metric-interest/source summary, resumable, accessible), guided intent composer with EvidencePack coverage badges, plan review with explainability audit trail + safety badges (approve-with-edits/reject through domain-transition mirror), mobile parity + maestro flows, Playwright golden journey #1 head + ESCALATE variant; web unit 123->217, e2e 6/6; byte-verified sandbox tarball (sha256 6922c71c); merged 55761c8 2026-09-12.
+
+next_dispatch:
+- M6-B wave (B4-B6 Lane B, B8 Lane A, B10 Lane C) -> then B7 sharing/revocation UX + B9 consent settings (Lane B) -> M6 EXIT: golden journeys #1 #2 #4 #7 pass on web + supported mobile paths.
 
 merged_in_M3:
 - M3-C (PR #13, Lane C): @orbb/auth — SessionService (opaque hashed tokens, atomic rotate), dependency-free WebAuthn (hand-written CBOR, ES256/Ed25519/RS256, none+packed attestation, signCount clone detection), email OTP (single-use/TTL/throttle), recovery codes (hashed, timingSafeEqual), Upstash REST rate-limit adapter (SHAPE-VERIFIED via fetch stub, fail-closed, parity-tested vs in-memory), AccountService seams; zero external runtime deps; 147 tests; lockfile +16/-3.
@@ -65,7 +71,6 @@ merged_in_M5:
 - M5 EXIT verified on fresh main 175d7e1: all gates 0; m5-exit-harness.test.ts 19/19 — THREE intents (manage-blood-pressure / increase-activity / improve-sleep) generate explainable plans from versioned EvidencePacks; audit trail proves pack lineage + published-only states + review traceability; deterministic replay. No plan executes before publication.
 - All deliveries byte-verified sandbox tarballs (sha256: 753ec0b1 / 39a5d2f8 / 491b7464); one lesson-10 continuation nudge revived a stalled m5-a turn.
 
-next_dispatch:
-- M6 packets (B1-B10 by lane: web/mobile UX + notification engine + adherence abstraction); exit: golden journeys #1 #2 #4 #7 pass on web + supported mobile paths.
+(see the active next_dispatch near the top of this file — superseded per-wave dispatch lines are pruned to keep one live plan)
 
 Do not mark this file green until actual code, tests, and preview verification exist.
