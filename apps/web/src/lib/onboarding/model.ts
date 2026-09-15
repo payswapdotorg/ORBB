@@ -126,12 +126,15 @@ export const ONBOARDING_METRIC_OPTIONS: readonly {
  */
 export const ONBOARDING_SOURCE_OPTIONS: readonly {
   readonly kind: "manual" | "device" | "app";
+  /** Stable unique key (the seam's method id; "manual" for the manual source). */
+  readonly seamId: string;
   readonly label: string;
   readonly detail: string;
   readonly connected: boolean;
 }[] = [
   {
     kind: "manual",
+    seamId: "SYNTH-source-manual",
     label: "Manual entry",
     detail:
       "Registered and active (src_SYNTH-source-manual). Every capture records provenance with you as the actor.",
@@ -140,6 +143,11 @@ export const ONBOARDING_SOURCE_OPTIONS: readonly {
   ...CAPTURE_SHAPES.flatMap((shape) =>
     shape.futureMethodOptions.map((option) => ({
       kind: (option.id.includes("app-") ? "app" : "device") as "app" | "device",
+      // The seam's method id is the stable unique key — several shapes
+      // share seam LABELS (e.g. "App import"), so the label can never be
+      // the React key (M6-B fix: duplicate-key warnings surfaced by the
+      // golden journeys).
+      seamId: option.id,
       label: option.label,
       detail: `${option.meta} — display only at this milestone.`,
       connected: false,

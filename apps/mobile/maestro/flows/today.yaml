@@ -1,0 +1,59 @@
+# M6-B Today/task-flow journey (Lane B): the intent-driven Today surface
+# after the first-run gate — the intent focus list, the "What matters today"
+# task cards (metric, due window, reason, methods with availability,
+# effort, privacy impact, clinic/CHW fallback), and opening the inline
+# manual-capture flow from a due task's completion button.
+#
+# All asserted strings are SYNTH-marked or architectural labels; nothing
+# here is or resembles real PHI.
+#
+# The first-run onboarding quick-pass mirrors the intent journey's tolerant
+# prefix: the Today tab runs the M6-A onboarding on fresh installs
+# (session-scoped completion), and the steps below complete it with the
+# Person persona (onboarding.yaml's vocabulary); on a resumed session the
+# conditional block is a no-op.
+#
+# MAESTRO_APP_ID: the target app id on the device/emulator
+# (dev build: org.orbb.mobile; or the Expo Go host package id).
+appId: ${MAESTRO_APP_ID}
+name: ORBB today journey (M6-B)
+tags:
+  - M6
+  - today
+---
+- launchApp
+
+# First-run onboarding quick-pass (Person persona; metric/source steps
+# skipped via Continue — the same steps onboarding.yaml drives explicitly).
+- runFlow:
+    when:
+      visible: "Welcome to ORBB"
+    commands:
+      - tapOn: "Get started"
+      - tapOn:
+          text: "Person — tracking my own health"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Finish setup"
+
+# The M6-B Today surface: what you are working toward + what matters today.
+- assertVisible: "Today"
+- assertVisible: "What you are working toward"
+- assertVisible: "What matters today"
+
+# The due blood-pressure task card carries every §Measurement task UX field.
+- assertVisible: "Blood Pressure Systolic"
+- assertVisible: "Due by end of today"
+- assertVisible: "Clinic/CHW fallback"
+- assertVisible: "Window missed — was due yesterday at 09:00"
+
+# Open the completion route: the due task's button (the primary route is
+# the manual journey — the cuff seam is not connected yet).
+- tapOn: "Complete now — Manual entry — home BP cuff reading"
+
+# The EXISTING M4-B manual capture flow mounts inline (step 1: the metric
+# picker) inside a keyboard-aware section.
+- assertVisible: "Record a measurement"
+- assertVisible: "Step 1 of 3"
+- assertVisible: "Close without completing"

@@ -1,5 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
-import { color, radius, spacing, typography } from "@orbb/ui/tokens";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { color, radius, spacing, touchTarget, typography } from "@orbb/ui/tokens";
 import {
   CAPTURE_QUALITY_LABELS,
   buildRecordSummary,
@@ -14,11 +14,20 @@ import {
  *
  * Every row exposes ONE accessibility label combining all of it, so
  * screen readers (and Maestro) receive the full provenance summary.
+ *
+ * M6-B B5 (additive): when the host passes `onOpenDetail`, each row
+ * becomes a tappable button (44px target, accessibilityRole="button",
+ * label "View provenance detail of <title>") that opens the B5
+ * observation/provenance detail overlay for that record. Every existing
+ * visible string stays byte-identical (the M4-B maestro journey asserts
+ * them); without the prop the rows render exactly as before.
  */
 
 export interface CaptureHistoryProps {
   readonly records: readonly MobileCaptureRecord[];
   readonly now: Date;
+  /** M6-B B5: opens the provenance detail of one record (optional). */
+  readonly onOpenDetail?: (record: MobileCaptureRecord) => void;
 }
 
 const QUALITY_LABEL_STYLE: Readonly<
@@ -29,7 +38,7 @@ const QUALITY_LABEL_STYLE: Readonly<
   "low-quality": { color: color.danger, backgroundColor: color.dangerSubtle },
 };
 
-export function CaptureHistory({ records, now }: CaptureHistoryProps) {
+export function CaptureHistory({ records, now, onOpenDetail }: CaptureHistoryProps) {
   return (
     <View style={styles.card}>
       <Text accessibilityRole="header" style={styles.title}>
@@ -50,12 +59,8 @@ export function CaptureHistory({ records, now }: CaptureHistoryProps) {
             color: color.fgMuted,
             backgroundColor: color.surface,
           };
-          return (
-            <View
-              key={record.recordId}
-              accessibilityLabel={summary.accessibilityLabel}
-              style={styles.row}
-            >
+          const rowContent = (
+            <>
               <View style={styles.rowHeader}>
                 <Text style={styles.rowTitle}>{summary.title}</Text>
                 <View
@@ -79,6 +84,27 @@ export function CaptureHistory({ records, now }: CaptureHistoryProps) {
               {record.notes !== undefined ? (
                 <Text style={styles.rowNotes}>{`Notes: ${record.notes}`}</Text>
               ) : null}
+            </>
+          );
+          return onOpenDetail !== undefined ? (
+            <Pressable
+              key={record.recordId}
+              accessibilityRole="button"
+              accessibilityLabel={`View provenance detail of ${summary.title}`}
+              onPress={() => {
+                onOpenDetail(record);
+              }}
+              style={styles.row}
+            >
+              {rowContent}
+            </Pressable>
+          ) : (
+            <View
+              key={record.recordId}
+              accessibilityLabel={summary.accessibilityLabel}
+              style={styles.row}
+            >
+              {rowContent}
             </View>
           );
         })
@@ -122,6 +148,7 @@ const styles = StyleSheet.create({
     borderTopColor: color.borderSubtle,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingVertical: spacing[3],
+    minHeight: touchTarget.minimum,
   },
   rowHeader: {
     alignItems: "center",
