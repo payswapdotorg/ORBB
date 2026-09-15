@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Heading, Text } from "@orbb/ui";
 import { OnboardingJourney } from "@/components/onboarding/onboarding-journey";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { TodaySurface } from "@/components/today/today-surface";
 import {
   initialOnboardingDraft,
   isOnboardingComplete,
@@ -12,17 +12,19 @@ import {
 } from "@/lib/onboarding/model";
 
 /**
- * Overview first-run gate (M6-A): the Overview surface renders the
- * onboarding journey until the first-run record completes, then the
- * standard overview content.
+ * Overview first-run gate (M6-A, extended by M6-B B4): the Overview
+ * surface renders the onboarding journey until the first-run record
+ * completes, then the INTENT-DRIVEN TODAY SURFACE (the frozen §Navigation
+ * model's Today content — what you are working toward, what is due, why,
+ * and the easiest valid way to complete it).
  *
  * Hydration safety: the server and the first client render agree on the
- * neutral "checking" state; the real decision (journey vs overview) lands
+ * neutral "checking" state; the real decision (journey vs today) lands
  * after mount, once localStorage is readable (the capture-flow
  * default-after-mount discipline — no wrong-content flash).
  */
 export function OverviewFirstRun() {
-  const [phase, setPhase] = useState<"checking" | "onboarding" | "overview">(
+  const [phase, setPhase] = useState<"checking" | "onboarding" | "today">(
     "checking",
   );
   const [draft, setDraft] = useState<OnboardingDraft | null>(null);
@@ -35,7 +37,7 @@ export function OverviewFirstRun() {
       return;
     }
     setDraft(stored);
-    setPhase(isOnboardingComplete(stored) ? "overview" : "onboarding");
+    setPhase(isOnboardingComplete(stored) ? "today" : "onboarding");
   }, []);
 
   if (phase === "checking") {
@@ -60,7 +62,7 @@ export function OverviewFirstRun() {
           <OnboardingJourney
             initialDraft={draft}
             onComplete={() => {
-              setPhase("overview");
+              setPhase("today");
             }}
           />
         </div>
@@ -69,9 +71,15 @@ export function OverviewFirstRun() {
   }
 
   return (
-    <PlaceholderPage
-      title="Overview"
-      description="Your starting view across intents, today's measurements, and health signals."
-    />
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
+      <div>
+        <Heading level={1}>Today</Heading>
+        <Text variant="muted">
+          What you are trying to accomplish, what is due, why it is due, and
+          the easiest valid way to complete it.
+        </Text>
+      </div>
+      <TodaySurface />
+    </div>
   );
 }

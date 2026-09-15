@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Heading, Text } from "@orbb/ui";
-import { DataboxEvidence } from "@/components/databox/databox-evidence";
-import { ConsentSection } from "@/components/databox/consent-section";
+import { DataboxWorkspace } from "@/components/databox/databox-workspace";
 import { RoleSurfaceNotice } from "@/components/role-surface-notice";
 
 export const metadata: Metadata = {
@@ -9,11 +8,15 @@ export const metadata: Metadata = {
 };
 
 /**
- * DataBox journey (M3-B): the M0 placeholder is now a real surface mounted
- * on the `@orbb/ui` design system — evidence list (sortable table with
- * disclosure metadata rows) + timeline view, and the "Share with
- * clinician" consent flow. Everything is synthetic (SYNTH) — no real
- * medical data, no backend calls beyond the local route-handler stub.
+ * DataBox journey (M3-B, upgraded by M6-B B6): the §DataBox UX model — a
+ * timeline plus collections as the DEFAULT human-readable presentation,
+ * search and the four filters (time, metric, source, quality), the
+ * advanced inspection affordance (raw evidence, metadata, provenance,
+ * model versions — the extended M3-B disclosure pattern), the honest
+ * entry points for export/share/revoke/access-history (share + revoke
+ * wired to the existing ConsentSheet reviewable contract), and the B5
+ * provenance-detail links for observation entries. Everything is
+ * synthetic (SYNTH) — the pinned M3-B reference corpus.
  */
 export default function DataboxPage() {
   return (
@@ -26,8 +29,7 @@ export default function DataboxPage() {
         </Text>
       </div>
       <RoleSurfaceNotice surface="databox" />
-      <DataboxEvidence />
-      <ConsentSection />
+      <DataboxWorkspace />
       <p className="m-0 text-xs text-fg-muted">
         Everything on this screen is synthetic (SYNTH) — no real medical
         data, no real credentials, nothing leaves your DataBox.

@@ -8,13 +8,16 @@ export const metadata: Metadata = {
 };
 
 /**
- * Measurements surface (M4-B): the manual capture journey is now
+ * Measurements surface (M4-B + M6-B B5): the manual capture journey is
  * first-class — a three-step "Record a measurement" flow (metric → method
  * → values/context → review with quality self-assessment → submit to the
  * `/api/capture` route stub with an in-memory store) plus the recent
  * manual-observations history (table + timeline) reading the same store.
- * The measurement summary card (Sparkline + BarChart over synthetic data)
- * stays from M3-B. Everything is synthetic (SYNTH).
+ * M6-B B5 adds: the device-sources import journey (SYNTH-Device-A →
+ * duplicate-source reconciliation with per-source provenance) and the
+ * observation/provenance detail (the §Provenance UX chain), reachable
+ * from capture history, from the Today surface's completed tasks, and
+ * via deep link from the DataBox. Everything is synthetic (SYNTH).
  */
 export default function MeasurementsPage() {
   return (

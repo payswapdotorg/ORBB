@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Button,
   Card,
@@ -47,23 +47,58 @@ const TRIGGER_LABEL: Readonly<Record<GrantPhase, string>> = {
   revoked: "Share again",
 };
 
-export function ConsentSection() {
-  const [phase, setPhase] = useState<GrantPhase>("pending");
+export interface ConsentSectionProps {
+  /**
+   * M6-B B6: controlled grant phase (the DataBox actions card drives the
+   * same share through its entry points). Absent -> internal state (the
+   * M3-B behavior, unchanged — the existing tests render it uncontrolled).
+   */
+  readonly phase?: GrantPhase;
+  /** Fired on every phase transition (controlled and uncontrolled alike). */
+  readonly onPhaseChange?: (phase: GrantPhase) => void;
+  /**
+   * M6-B B6: increment to request opening the sheet (the actions card's
+   * Share / Revoke-access entries route through the SAME reviewable
+   * contract — sharing is never a one-click toggle).
+   */
+  readonly openRequest?: number;
+}
+
+export function ConsentSection({ phase, onPhaseChange, openRequest }: ConsentSectionProps) {
+  const [internalPhase, setInternalPhase] = useState<GrantPhase>("pending");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [announcement, setAnnouncement] = useState<string | null>(null);
+  const lastOpenRequest = useRef(openRequest ?? 0);
+
+  const grantPhase = phase ?? internalPhase;
+
+  const applyPhase = (next: GrantPhase): void => {
+    setInternalPhase(next);
+    onPhaseChange?.(next);
+  };
+
+  // The actions card's Share/Revoke entries request the sheet here —
+  // always THROUGH the sheet (the reviewable-contract discipline).
+  useEffect(() => {
+    const request = openRequest ?? 0;
+    if (request > lastOpenRequest.current) {
+      lastOpenRequest.current = request;
+      setSheetOpen(true);
+    }
+  }, [openRequest]);
 
   const share = SYNTHETIC_CLINIC_SHARE;
-  const badge = BADGE[phase];
+  const badge = BADGE[grantPhase];
 
   const statusText =
-    phase === "active"
+    grantPhase === "active"
       ? `Shared with ${share.recipientName} until ${share.expiryLabel}.`
-      : phase === "revoked"
+      : grantPhase === "revoked"
         ? `Access for ${share.recipientName} was revoked. No data is shared.`
         : `Not shared with ${share.recipientName} yet.`;
 
   const confirm = (): void => {
-    setPhase("active");
+    applyPhase("active");
     setSheetOpen(false);
     setAnnouncement(
       `Share confirmed: ${share.recipientName} can read the scoped data until ${share.expiryLabel}.`,
@@ -71,7 +106,7 @@ export function ConsentSection() {
   };
 
   const revoke = (): void => {
-    setPhase("revoked");
+    applyPhase("revoked");
     setSheetOpen(false);
     setAnnouncement(`Share with ${share.recipientName} revoked. Access ended immediately.`);
   };
@@ -93,7 +128,7 @@ export function ConsentSection() {
               setSheetOpen(true);
             }}
           >
-            {TRIGGER_LABEL[phase]}
+            {TRIGGER_LABEL[grantPhase]}
           </Button>
         </div>
         <p aria-live="polite" className="m-0 text-sm text-fg-muted">

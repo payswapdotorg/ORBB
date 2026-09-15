@@ -74,13 +74,17 @@ test("web shell renders, role emphasis switches, and the DataBox journey loads",
   ).toBeChecked();
 
   // 4. Navigate to the DataBox journey and assert the real mounted surface
-  //    (M3-B: the M0 placeholder was replaced by the design-system journey).
+  //    (M3-B: the M0 placeholder was replaced by the design-system journey;
+  //    M6-B B6: the DEFAULT presentation is now the timeline + collections —
+  //    the evidence list is still one click away and stays asserted below).
   await nav.getByRole("link", { name: "DataBox", exact: true }).click();
   await expect(page).toHaveURL(/\/databox$/);
   await expect(
     page.getByRole("heading", { level: 1, name: "DataBox" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "Evidence" })).toBeVisible();
+  await expect(page.getByText("Showing the evidence timeline.")).toBeVisible();
+  await page.getByRole("button", { name: "Evidence list" }).click();
   await expect(page.getByRole("table")).toBeVisible();
   await expect(
     page.getByRole("heading", { level: 2, name: "Sharing" }),
