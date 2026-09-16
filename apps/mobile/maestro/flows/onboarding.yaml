@@ -47,5 +47,8 @@ tags:
 - assertVisible: "Person — tracking my own health"
 - tapOn: "Finish setup"
 
-# After completion the Today placeholder returns (session-scoped record).
-- assertVisible: "Coming in M6+"
+# After completion the intent-driven TODAY surface renders (M6-B B4 —
+# the placeholder became the task home).
+- assertVisible: "What you're working on"
+- assertVisible: "What's due today"
+- assertVisible: "Due by 09:00"

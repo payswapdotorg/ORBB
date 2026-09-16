@@ -103,11 +103,24 @@ interface SavedSummary {
 export interface ManualCaptureFlowProps {
   /** Fired after a capture is stored (drives the history refresh). */
   onCaptured?: () => void;
+  /**
+   * M6-B B4: pre-selected capture shape (the Today task flow routes a
+   * due task into this flow with its metric already chosen — step 2,
+   * method + values). Undefined preserves the default journey (step 1,
+   * the metric picker). An unknown id falls back to the default journey.
+   */
+  initialShapeId?: string;
+  /** Optional context banner (e.g. the task being completed — B4). */
+  contextNote?: string;
 }
 
-export function ManualCaptureFlow({ onCaptured }: ManualCaptureFlowProps) {
-  const [step, setStep] = useState<CaptureStep>(1);
-  const [shapeId, setShapeId] = useState<string | undefined>(undefined);
+export function ManualCaptureFlow({ onCaptured, initialShapeId, contextNote }: ManualCaptureFlowProps) {
+  const presetShapeId =
+    initialShapeId !== undefined && findCaptureShape(initialShapeId) !== undefined
+      ? initialShapeId
+      : undefined;
+  const [step, setStep] = useState<CaptureStep>(presetShapeId !== undefined ? 2 : 1);
+  const [shapeId, setShapeId] = useState<string | undefined>(presetShapeId);
   const [metricError, setMetricError] = useState<string | undefined>(undefined);
   const [methodChosen, setMethodChosen] = useState(false);
   const [methodError, setMethodError] = useState<string | undefined>(undefined);
@@ -138,8 +151,8 @@ export function ManualCaptureFlow({ onCaptured }: ManualCaptureFlowProps) {
   }, []);
 
   function resetDraft(): void {
-    setStep(1);
-    setShapeId(undefined);
+    setStep(presetShapeId !== undefined ? 2 : 1);
+    setShapeId(presetShapeId);
     setMetricError(undefined);
     setMethodChosen(false);
     setMethodError(undefined);
@@ -375,6 +388,11 @@ export function ManualCaptureFlow({ onCaptured }: ManualCaptureFlowProps) {
   return (
     <Card>
       <Heading level={2}>Record a measurement</Heading>
+      {contextNote !== undefined ? (
+        <p className="m-0 mt-2 rounded-card border border-border-subtle bg-canvas px-3 py-2 text-sm text-fg-muted">
+          {contextNote}
+        </p>
+      ) : null}
       <Text variant="muted">
         A first-class manual capture: what you measured, how, and how
         complete the reading was — recorded with full provenance.

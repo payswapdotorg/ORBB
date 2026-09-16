@@ -52,6 +52,12 @@ export interface CaptureFormProps {
    * "queued" (offline-tolerant path — the caller owns the queue).
    */
   readonly onSubmit: (submission: MobileCaptureSubmission) => "recorded" | "queued";
+  /**
+   * M6-B B4: pre-selected capture shape (the Today task flow routes a due
+   * task into this form with its metric already chosen — step 2). Unknown
+   * ids fall back to the default journey (step 1).
+   */
+  readonly initialShapeId?: string;
 }
 
 type CaptureStep = 1 | 2 | 3;
@@ -128,9 +134,13 @@ function ErrorText({ message }: { readonly message: string }) {
   return <Text style={styles.errorText}>{message}</Text>;
 }
 
-export function CaptureForm({ onSubmit }: CaptureFormProps) {
-  const [step, setStep] = useState<CaptureStep>(1);
-  const [shapeId, setShapeId] = useState<string | undefined>(undefined);
+export function CaptureForm({ onSubmit, initialShapeId }: CaptureFormProps) {
+  const presetShapeId =
+    initialShapeId !== undefined && CAPTURE_SHAPES.some((candidate) => candidate.id === initialShapeId)
+      ? initialShapeId
+      : undefined;
+  const [step, setStep] = useState<CaptureStep>(presetShapeId !== undefined ? 2 : 1);
+  const [shapeId, setShapeId] = useState<string | undefined>(presetShapeId);
   const [metricError, setMetricError] = useState<string | undefined>(undefined);
   const [methodChosen, setMethodChosen] = useState(false);
   const [methodError, setMethodError] = useState<string | undefined>(undefined);
@@ -159,8 +169,8 @@ export function CaptureForm({ onSubmit }: CaptureFormProps) {
   }
 
   function resetDraft(): void {
-    setStep(1);
-    setShapeId(undefined);
+    setStep(presetShapeId !== undefined ? 2 : 1);
+    setShapeId(presetShapeId);
     setMetricError(undefined);
     setMethodChosen(false);
     setMethodError(undefined);

@@ -9,7 +9,8 @@ import { expect, test } from "@playwright/test";
  *    welcome, persona (the existing emphasis model — the header role radio
  *    syncs), metric interests, source summary (manual registered, seams
  *    display-only), completion persisted to localStorage with focus moved
- *    to each step heading and polite step announcements.
+ *    to each step heading and polite step announcements; the completed
+ *    first-run lands on the TODAY surface (M6-B B4).
  * 2. INTENT CREATION (B2): the guided composer on /intents — goal (metric,
  *    direction, target), constraints (cadence + method preference) with
  *    EvidencePack coverage badges, submit to the /api/intents stub ->
@@ -18,6 +19,11 @@ import { expect, test } from "@playwright/test";
  *    PASS badge, approve-with-edits (reviewer note) through /api/plans ->
  *    the plan lands in the published store; the state change is announced
  *    politely.
+ * 4. THE FULL TAIL (M6-B B4 — golden journey #1 completion): back on the
+ *    Today surface, complete the due blood-pressure task through the
+ *    EXISTING manual-capture flow, see the provenance on the recorded
+ *    result, and see the per-intent progress update (counts only —
+ *    conservative clinical states, never gamified).
  *
  * All data is synthetic (SYNTH) — no real medical data, no real
  * credentials, no network mocks of real APIs.
@@ -96,8 +102,15 @@ test("golden journey #1: onboarding -> create intent -> review candidate plan ->
   ).toBeVisible();
   await page.getByRole("button", { name: "Finish setup" }).click();
 
-  // The Overview placeholder returns once the first run completes.
-  await expect(page.getByText("Coming in M6+")).toBeVisible();
+  // The TODAY surface (M6-B B4) renders once the first run completes —
+  // the Overview surface became the intent-driven task home.
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Today" }),
+  ).toBeVisible();
+  await expect(page.getByText("What you're working on")).toBeVisible();
+  await expect(
+    page.getByText("0 of 2 measurements completed today."),
+  ).toBeVisible();
   const draft = await page.evaluate(
     (key) => window.localStorage.getItem(key),
     ONBOARDING_DRAFT_KEY,
@@ -106,10 +119,15 @@ test("golden journey #1: onboarding -> create intent -> review candidate plan ->
   expect(JSON.parse(draft as string).completedAt).toBeTruthy();
   expect(JSON.parse(draft as string).role).toBe("clinician");
 
-  // Reload: the completed first-run state is respected (no journey).
+  // Reload: the completed first-run state is respected (no journey —
+  // the Today surface persists).
   await page.reload();
-  await expect(page.getByText("Coming in M6+")).toBeVisible();
-  await expect(page.getByText("Onboarding — step 1 of 5: welcome")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Today" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Onboarding — step 1 of 5: welcome"),
+  ).toHaveCount(0);
 
   // ---------------------------------------------------------------
   // 2. INTENT CREATION — the guided composer on the Intents surface.
@@ -238,6 +256,113 @@ test("golden journey #1: onboarding -> create intent -> review candidate plan ->
   // A second intent can be composed (the workspace resets cleanly).
   await page.getByRole("button", { name: "Create another intent" }).click();
   await expect(page.getByText("Step 1 of 3 — choose your goal")).toBeVisible();
+
+  // ---------------------------------------------------------------
+  // 4. THE FULL TAIL (M6-B B4): back on Today, complete the due task
+  //    through the existing manual-capture flow, see provenance on the
+  //    result, and see the progress update.
+  // ---------------------------------------------------------------
+  await page
+    .getByRole("navigation", { name: "Primary" })
+    .getByRole("link", { name: "Overview", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Today" }),
+  ).toBeVisible();
+
+  // The task cards per §Measurement task UX: metric | due window | reason |
+  // acceptable methods | estimated effort | privacy impact | fallback.
+  await expect(page.getByText("What's due today")).toBeVisible();
+  const dueCard = page.locator(
+    '[data-task-id="task_SYNTH-task-today-bp-0001"]',
+  );
+  await expect(
+    dueCard.getByRole("heading", { name: "Blood pressure (systolic + diastolic)" }),
+  ).toBeVisible();
+  await expect(dueCard.getByText("Due by 09:00")).toBeVisible();
+  await expect(
+    dueCard.getByText("Supports your blood-pressure monitoring plan"),
+  ).toBeVisible();
+  await expect(dueCard.getByText("easiest valid option")).toBeVisible();
+  await expect(
+    dueCard.getByText(/Estimated effort: ~2 min/),
+  ).toBeVisible();
+  await expect(
+    dueCard.getByText(/Private — stays in your DataBox/),
+  ).toBeVisible();
+  await expect(dueCard.getByText("Clinic or CHW fallback")).toBeVisible();
+
+  // The missed-window weight card surfaces the fallback explicitly.
+  const missedCard = page.locator('[data-task-phase="missed"]');
+  await expect(
+    missedCard.getByText(/Missed yesterday 21:00 — rolled forward to today 21:00/),
+  ).toBeVisible();
+  await expect(
+    missedCard.getByText(/community health worker/i),
+  ).toBeVisible();
+
+  // Complete the due task: the existing M4-B capture flow inlines with
+  // the panel metric pre-selected (step 2).
+  await dueCard
+    .getByRole("button", { name: /complete now — manual entry — home bp cuff reading/i })
+    .click();
+  await expect(
+    page.getByText(/Completing: Blood pressure \(systolic \+ diastolic\)/),
+  ).toBeVisible();
+  await expect(page.getByText("Step 2 of 3 — method, values, and context")).toBeVisible();
+  await page.getByLabel(/systolic \(blood pressure systolic\)/i).fill("122");
+  await page.getByLabel(/diastolic \(blood pressure diastolic\)/i).fill("78");
+  await page
+    .getByRole("radiogroup", { name: /how did you capture it\?/i })
+    .getByText("Manual entry — home BP cuff reading", { exact: true })
+    .click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Step 3 of 3 — review and save")).toBeVisible();
+
+  // Self-assess COMPLETE and save.
+  await page
+    .getByRole("radiogroup", { name: /quality self-assessment/i })
+    .getByText("Complete", { exact: true })
+    .click();
+  await page.getByRole("button", { name: "Save measurement" }).click();
+
+  // The recorded result carries provenance (actor + methods actually used).
+  // Values 122/78 — deliberately distinct from the user-journey capture
+  // test's 118/76 so parallel journeys sharing the in-memory store never
+  // collide on history-row text assertions.
+  const recorded = page.locator('[data-capture-recorded="true"]');
+  await expect(recorded.getByText("Measurement saved.", { exact: true })).toBeVisible();
+  await expect(
+    recorded.getByText(/Blood pressure 122\/78 mmHg — via Manual entry/),
+  ).toBeVisible();
+  await expect(
+    recorded.getByText(
+      /method actually used: SYNTH-method-bpsys-manual · provenance actor: prsn_SYNTH-person-0001/i,
+    ),
+  ).toBeVisible();
+
+  // The task transitions to completed and the per-intent progress updates
+  // (counts only — conservative, never gamified).
+  await expect(
+    page.getByText(/Blood pressure \(systolic \+ diastolic\) task completed — Lower blood pressure: 1 of 2 measurements completed today\./),
+  ).toBeVisible();
+  await expect(
+    page.getByText("1 of 2 measurements completed today.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-task-id="task_SYNTH-task-today-bp-0001"] [data-task-complete]'),
+  ).toHaveCount(0);
+  await expect(
+    page.locator('[data-task-id="task_SYNTH-task-today-bp-0001"]'),
+  ).toHaveAttribute("data-task-state", "completed");
+
+  // Reload: the Today surface reflects the persisted task state (the
+  // in-memory route store survives reloads — resumable).
+  await page.reload();
+  await expect(
+    page.getByText("1 of 2 measurements completed today.", { exact: true }),
+  ).toBeVisible();
 });
 
 test("golden journey #1 variant: weekly cadence escalates, rejection is terminal", async ({

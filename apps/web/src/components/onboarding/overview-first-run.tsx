@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Heading, Text } from "@orbb/ui";
 import { OnboardingJourney } from "@/components/onboarding/onboarding-journey";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { TodaySurface } from "@/components/today/today-surface";
 import {
   initialOnboardingDraft,
   isOnboardingComplete,
@@ -12,17 +12,18 @@ import {
 } from "@/lib/onboarding/model";
 
 /**
- * Overview first-run gate (M6-A): the Overview surface renders the
- * onboarding journey until the first-run record completes, then the
- * standard overview content.
+ * Overview first-run gate (M6-A, upgraded by M6-B B4): the `/` surface
+ * renders the first-run onboarding journey until the record completes,
+ * then the surface BECOMES the intent-driven Today surface (the frozen
+ * navigation model — NOT a dashboard of charts).
  *
  * Hydration safety: the server and the first client render agree on the
- * neutral "checking" state; the real decision (journey vs overview) lands
+ * neutral "checking" state; the real decision (journey vs Today) lands
  * after mount, once localStorage is readable (the capture-flow
  * default-after-mount discipline — no wrong-content flash).
  */
 export function OverviewFirstRun() {
-  const [phase, setPhase] = useState<"checking" | "onboarding" | "overview">(
+  const [phase, setPhase] = useState<"checking" | "onboarding" | "today">(
     "checking",
   );
   const [draft, setDraft] = useState<OnboardingDraft | null>(null);
@@ -35,14 +36,14 @@ export function OverviewFirstRun() {
       return;
     }
     setDraft(stored);
-    setPhase(isOnboardingComplete(stored) ? "overview" : "onboarding");
+    setPhase(isOnboardingComplete(stored) ? "today" : "onboarding");
   }, []);
 
   if (phase === "checking") {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
         <p aria-live="polite" className="m-0 text-sm text-fg-muted">
-          Loading your overview…
+          Loading your today surface…
         </p>
       </div>
     );
@@ -60,7 +61,7 @@ export function OverviewFirstRun() {
           <OnboardingJourney
             initialDraft={draft}
             onComplete={() => {
-              setPhase("overview");
+              setPhase("today");
             }}
           />
         </div>
@@ -69,9 +70,15 @@ export function OverviewFirstRun() {
   }
 
   return (
-    <PlaceholderPage
-      title="Overview"
-      description="Your starting view across intents, today's measurements, and health signals."
-    />
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
+      <Heading level={1}>Today</Heading>
+      <Text variant="muted">
+        What you&apos;re trying to accomplish, what matters today, and the
+        easiest valid way to complete it.
+      </Text>
+      <div className="mt-4">
+        <TodaySurface />
+      </div>
+    </div>
   );
 }

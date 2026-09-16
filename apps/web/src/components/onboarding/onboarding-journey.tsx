@@ -263,7 +263,7 @@ export function OnboardingJourney({
             <ul className="m-0 flex list-none flex-col gap-2 pl-0">
               {ONBOARDING_SOURCE_OPTIONS.map((option) => (
                 <li
-                  key={option.label}
+                  key={option.id}
                   className="flex flex-col gap-1 rounded-card border border-border-subtle bg-canvas p-3"
                 >
                   <span className="flex flex-wrap items-center gap-2">

@@ -1,10 +1,13 @@
-import { StyleSheet, Text, View } from "react-native";
-import { color, radius, spacing, typography } from "@orbb/ui/tokens";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { color, radius, spacing, touchTarget, typography } from "@orbb/ui/tokens";
 import {
   CAPTURE_QUALITY_LABELS,
   buildRecordSummary,
   type MobileCaptureRecord,
 } from "../lib/capture/model";
+import { observationViewFromMobileCapture, type ObservationView } from "../lib/databox/model";
+import { ObservationDetailScreen } from "./observation-detail";
 
 /**
  * Capture history list (M4-B, mobile): the recent manual observations the
@@ -30,6 +33,9 @@ const QUALITY_LABEL_STYLE: Readonly<
 };
 
 export function CaptureHistory({ records, now }: CaptureHistoryProps) {
+  // M6-B B5: the observation provenance detail is reachable from this
+  // history — one observation detail open at a time (Modal).
+  const [selected, setSelected] = useState<ObservationView | null>(null);
   return (
     <View style={styles.card}>
       <Text accessibilityRole="header" style={styles.title}>
@@ -79,15 +85,54 @@ export function CaptureHistory({ records, now }: CaptureHistoryProps) {
               {record.notes !== undefined ? (
                 <Text style={styles.rowNotes}>{`Notes: ${record.notes}`}</Text>
               ) : null}
+              {record.observations.map((observation) => (
+                <Pressable
+                  key={observation.id}
+                  accessibilityLabel={`Full provenance: ${observation.id}`}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setSelected(
+                      observationViewFromMobileCapture(observation, record, now),
+                    );
+                  }}
+                  style={styles.provenanceButton}
+                >
+                  <Text style={styles.provenanceButtonText}>
+                    {`Full provenance: ${observation.id}`}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
           );
         })
       )}
+      {selected !== null ? (
+        <ObservationDetailScreen
+          observation={selected}
+          onClose={() => {
+            setSelected(null);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  provenanceButton: {
+    alignItems: "flex-start" as const,
+    borderColor: color.borderStrong,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    justifyContent: "center" as const,
+    minHeight: touchTarget.minimum,
+    paddingHorizontal: spacing[3],
+  },
+  provenanceButtonText: {
+    color: color.accent,
+    fontSize: typography.size.sm,
+    fontWeight: "600" as const,
+  },
   card: {
     backgroundColor: color.surface,
     borderColor: color.borderSubtle,

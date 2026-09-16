@@ -1,0 +1,71 @@
+# M6-B B6 DataBox journey (Lane B): the DataBox tab's timeline +
+# collections presentation with search and the four filters (time,
+# concept, source, confidence/quality), the device-adapter import that
+# reconciles duplicate sources, and the full provenance detail (B5).
+#
+# All asserted strings are SYNTH-marked or architectural labels; nothing
+# here is or resembles real PHI.
+#
+# MAESTRO_APP_ID: the target app id on the device/emulator
+# (dev build: org.orbb.mobile; or the Expo Go host package id).
+appId: ${MAESTRO_APP_ID}
+name: ORBB databox journey (M6-B B6)
+tags:
+  - M6
+  - databox
+---
+- launchApp
+
+# On a fresh install the Today tab runs the first-run onboarding (M6-A);
+# complete its prefix first. On a resumed session this is a no-op.
+- runFlow:
+    when:
+      visible: "Welcome to ORBB"
+    commands:
+      - tapOn: "Get started"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Finish setup"
+
+# Enter the DataBox surface.
+- tapOn: "DataBox"
+- assertVisible: "Search your DataBox"
+- assertVisible: "Collections"
+- assertVisible: "Timeline"
+- assertVisible: "Heart Rate (1)"
+
+# The four §DataBox UX filters: time, source, quality (concept is the
+# collections row itself).
+- tapOn:
+    text: "Today (Sep 10)"
+- assertVisible: "2 of 4 observations."
+- tapOn:
+    text: "All time"
+
+# Search narrows the timeline (type into the focused search field).
+- tapOn:
+    text: "Search your DataBox"
+- inputText: "wearable"
+- assertVisible: "1 of 4 observations."
+- assertVisible: "Heart Rate: 62 beats/min"
+- clearText
+
+# The device-adapter import (golden journey #2): duplicate sources
+# reconciled into one canonical view with per-source provenance.
+- tapOn: "Import device observation"
+- assertVisible: "6 of 6 observations."
+- assertVisible: "Blood Pressure Systolic: 120 mmHg"
+
+# Open the canonical observation's full provenance detail (B5): the
+# chain, the measured-vs-estimated teaching, and the two sources.
+- tapOn:
+    text: "Blood Pressure Systolic: 120 mmHg"
+- assertVisible: "Observation provenance"
+- assertVisible: "This value is DERIVED."
+- assertVisible: "Two sources, one current value"
+- assertVisible: "Verdict: discordant"
+- assertVisible: "Canonical: Automatic cuff sync"
+- assertVisible: "Superseded: Manual entry — home BP cuff reading"
+- tapOn: "Close"

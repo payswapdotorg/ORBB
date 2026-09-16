@@ -21,5 +21,6 @@ tags:
 - assertVisible: "Services"
 - assertVisible: "You"
 - tapOn: "DataBox"
-- assertVisible: "DataBox"
-- assertVisible: "Coming in M6+"
+- assertVisible: "Search your DataBox"
+- assertVisible: "Collections"
+- assertVisible: "Timeline"

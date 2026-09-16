@@ -1,0 +1,56 @@
+# M6-B B4 Today journey (Lane B): the Today tab's intent-driven task
+# flow — see the per-intent progress, the due blood-pressure task card
+# (metric | due window | reason | acceptable methods | effort | privacy |
+# fallback), and open the capture flow for the due task.
+#
+# All asserted strings are SYNTH-marked or architectural labels; nothing
+# here is or resembles real PHI.
+#
+# MAESTRO_APP_ID: the target app id on the device/emulator
+# (dev build: org.orbb.mobile; or the Expo Go host package id).
+appId: ${MAESTRO_APP_ID}
+name: ORBB today journey (M6-B B4)
+tags:
+  - M6
+  - today
+---
+- launchApp
+
+# On a fresh install the Today tab runs the first-run onboarding (M6-A);
+# complete its prefix first. On a resumed session this is a no-op.
+- runFlow:
+    when:
+      visible: "Welcome to ORBB"
+    commands:
+      - tapOn: "Get started"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Finish setup"
+
+# Enter the Today surface (the intent-driven task home).
+- tapOn: "Today"
+- assertVisible: "What you're working on"
+- assertVisible: "0 of 2 measurements completed today."
+
+# The due task card: the §Measurement task UX fields.
+- assertVisible: "What's due today"
+- assertVisible: "Blood pressure (systolic + diastolic)"
+- assertVisible: "Due by 09:00"
+- assertVisible: "Supports your blood-pressure monitoring plan"
+- assertVisible: "Manual entry — home BP cuff reading"
+- assertVisible: "Automatic cuff sync"
+- assertVisible: "~2 min"
+- assertVisible: "Clinic or CHW fallback"
+
+# The missed-window card surfaces the fallback explicitly.
+- assertVisible: "Missed yesterday 21:00 — rolled forward to today 21:00"
+
+# Open the capture flow for the due task (the existing M4-B form, metric
+# pre-selected — lands on step 2, method + values).
+- tapOn:
+    text: "Complete now — Manual entry — home BP cuff reading"
+- assertVisible: "Complete a task"
+- assertVisible: "Completing: Blood pressure (systolic + diastolic)"
+- assertVisible: "Step 2 of 3"

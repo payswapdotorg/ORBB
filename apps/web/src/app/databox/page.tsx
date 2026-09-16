@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Heading, Text } from "@orbb/ui";
+import { DataboxJourney } from "@/components/databox/databox-journey";
+import { DataboxControls } from "@/components/databox/databox-controls";
 import { DataboxEvidence } from "@/components/databox/databox-evidence";
 import { ConsentSection } from "@/components/databox/consent-section";
 import { RoleSurfaceNotice } from "@/components/role-surface-notice";
@@ -9,11 +11,19 @@ export const metadata: Metadata = {
 };
 
 /**
- * DataBox journey (M3-B): the M0 placeholder is now a real surface mounted
- * on the `@orbb/ui` design system — evidence list (sortable table with
- * disclosure metadata rows) + timeline view, and the "Share with
- * clinician" consent flow. Everything is synthetic (SYNTH) — no real
- * medical data, no backend calls beyond the local route-handler stub.
+ * DataBox journey (M3-B, upgraded by M6-B B6): the §DataBox UX model —
+ * TIMELINE PLUS COLLECTIONS as the default human-readable presentation
+ * over the observation plane, with search and the four filters (time,
+ * concept, source, confidence/quality), advanced inspection per entry
+ * (raw evidence, metadata, provenance, model versions), and the honest
+ * data-controls entry points (share/revoke wired to the existing consent
+ * section; export/access-history labeled forthcoming — never faked).
+ *
+ * The M3-B evidence table + timeline stay mounted as the RAW-EVIDENCE
+ * records layer (advanced inspection of the underlying objects), and the
+ * "Share with clinician" consent flow stays the sharing contract.
+ * Everything is synthetic (SYNTH) — no real medical data, no real
+ * credentials, nothing leaves your DataBox.
  */
 export default function DataboxPage() {
   return (
@@ -26,6 +36,8 @@ export default function DataboxPage() {
         </Text>
       </div>
       <RoleSurfaceNotice surface="databox" />
+      <DataboxJourney />
+      <DataboxControls />
       <DataboxEvidence />
       <ConsentSection />
       <p className="m-0 text-xs text-fg-muted">

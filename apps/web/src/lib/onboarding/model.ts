@@ -125,12 +125,15 @@ export const ONBOARDING_METRIC_OPTIONS: readonly {
  * `futureMethodOptions` verbatim.
  */
 export const ONBOARDING_SOURCE_OPTIONS: readonly {
+  /** Unique source option id (the future-method id — keys never collide). */
+  readonly id: string;
   readonly kind: "manual" | "device" | "app";
   readonly label: string;
   readonly detail: string;
   readonly connected: boolean;
 }[] = [
   {
+    id: "SYNTH-source-manual",
     kind: "manual",
     label: "Manual entry",
     detail:
@@ -139,6 +142,7 @@ export const ONBOARDING_SOURCE_OPTIONS: readonly {
   },
   ...CAPTURE_SHAPES.flatMap((shape) =>
     shape.futureMethodOptions.map((option) => ({
+      id: option.id,
       kind: (option.id.includes("app-") ? "app" : "device") as "app" | "device",
       label: option.label,
       detail: `${option.meta} — display only at this milestone.`,

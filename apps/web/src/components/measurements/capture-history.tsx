@@ -15,7 +15,7 @@ import {
 } from "@orbb/ui";
 import { captureValueLabel } from "@/lib/capture/store";
 import { CAPTURE_QUALITY_LABELS, CAPTURE_QUALITY_TONES } from "@/lib/capture/quality";
-import type { CaptureRecordDto } from "@/lib/capture/types";
+import type { CaptureObservationDto, CaptureRecordDto } from "@/lib/capture/types";
 import { isCaptureErrorEnvelope } from "@/lib/capture/types";
 import { formatCapturedLabel, formatDayLabel, formatTimeLabel } from "@/lib/capture/format";
 import { SYNTHETIC_PERSON_LABEL } from "@/lib/capture/catalog";
@@ -57,9 +57,18 @@ export interface CaptureHistoryProps {
    * the history re-reads the store through the route.
    */
   readonly refreshToken: number;
+  /**
+   * M6-B B5: fired when the person opens the full §Provenance UX detail
+   * for one observation of a stored capture (the observation detail
+   * surface is reachable from this history).
+   */
+  readonly onOpenObservation?: (
+    observation: CaptureObservationDto,
+    record: CaptureRecordDto,
+  ) => void;
 }
 
-export function CaptureHistory({ refreshToken }: CaptureHistoryProps) {
+export function CaptureHistory({ refreshToken, onOpenObservation }: CaptureHistoryProps) {
   const [view, setView] = useState<HistoryView>("list");
   const [captures, setCaptures] = useState<readonly CaptureRecordDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -123,7 +132,7 @@ export function CaptureHistory({ refreshToken }: CaptureHistoryProps) {
             provenance: (
               <DueWindow tone="accent">You (self-tracking)</DueWindow>
             ),
-            details: <CaptureDetailsPanel record={record} />,
+            details: <CaptureDetailsPanel record={record} onOpenObservation={onOpenObservation} />,
           },
         }));
 
@@ -203,7 +212,15 @@ export function CaptureHistory({ refreshToken }: CaptureHistoryProps) {
  * Per-row provenance drawer (the architecture's Provenance UX contract:
  * captured by → method → quality → validation → capture metadata).
  */
-function CaptureDetailsPanel({ record }: { record: CaptureRecordDto }) {
+function CaptureDetailsPanel({
+  record,
+  onOpenObservation,
+}: {
+  record: CaptureRecordDto;
+  onOpenObservation?:
+    | ((observation: CaptureObservationDto, record: CaptureRecordDto) => void)
+    | undefined;
+}) {
   return (
     <DisclosurePanel id={`capture-details-${record.captureId}`} title={`Details: ${record.captureId}`}>
       <dl className="m-0 grid grid-cols-1 gap-2">
@@ -270,6 +287,20 @@ function CaptureDetailsPanel({ record }: { record: CaptureRecordDto }) {
               {record.observations.map((observation) => (
                 <li key={observation.id} className="font-mono text-xs">
                   {`${observation.id} (${observation.conceptCode})`}
+                  {onOpenObservation !== undefined ? (
+                    <>
+                      {" — "}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenObservation(observation, record);
+                        }}
+                        className="ml-1 min-h-[44px] text-xs text-accent underline decoration-accent decoration-2 underline-offset-4"
+                      >
+                        {`Full provenance: ${observation.id}`}
+                      </button>
+                    </>
+                  ) : null}
                 </li>
               ))}
             </ul>

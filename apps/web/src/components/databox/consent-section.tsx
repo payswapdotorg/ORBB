@@ -77,7 +77,8 @@ export function ConsentSection() {
   };
 
   return (
-    <Card>
+    <div id="sharing">
+      <Card>
       <Heading level={2}>Sharing</Heading>
       <Text variant="muted">
         Review a scoped data share before anything leaves your DataBox.
@@ -119,6 +120,7 @@ export function ConsentSection() {
         scopeLabel="Exactly what is shared"
         expiryLabel="Sharing ends"
       />
-    </Card>
+      </Card>
+    </div>
   );
 }

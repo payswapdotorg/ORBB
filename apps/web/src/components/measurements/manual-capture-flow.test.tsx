@@ -331,3 +331,51 @@ describe("ManualCaptureFlow — step 3 (review + submit)", () => {
     expect(screen.queryByText("Measurement saved.")).toBeNull();
   });
 });
+
+describe("ManualCaptureFlow — task pre-selection (M6-B B4)", () => {
+  it("starts at step 2 with the preset shape and renders the task context note", () => {
+    render(
+      <ManualCaptureFlow
+        initialShapeId="SYNTH-shape-bp-panel"
+        contextNote="Completing: Blood pressure (systolic + diastolic) — Due by 09:00 · task task_SYNTH-task-today-bp-0001."
+      />,
+    );
+    // No step 1: the metric is pre-selected by the task.
+    expect(screen.queryByText("Step 1 of 3 — choose what you measured")).toBeNull();
+    expect(screen.getByText("Step 2 of 3 — method, values, and context")).toBeTruthy();
+    expect(screen.getByText("Blood pressure", { exact: true })).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Completing: Blood pressure \(systolic \+ diastolic\) — Due by 09:00 · task task_SYNTH-task-today-bp-0001\./,
+      ),
+    ).toBeTruthy();
+    // The step-2 controls are all present (method picker + value fields).
+    expect(screen.getByRole("radiogroup", { name: /how did you capture it\?/i })).toBeTruthy();
+    expect(screen.getByLabelText(/systolic \(blood pressure systolic\)/i)).toBeTruthy();
+  });
+
+  it("resets back to the preset task shape (not the generic picker) after a save", async () => {
+    stubFetchWith(successfulCaptureResponse());
+    render(
+      <ManualCaptureFlow initialShapeId="SYNTH-shape-heart-rate" />,
+    );
+    expect(screen.getByText("Step 2 of 3 — method, values, and context")).toBeTruthy();
+    pickMethod(/manual pulse check/i);
+    fillField(/heart rate \(heart rate\)/i, "64");
+    fireEvent.click(screen.getByRole("button", { name: CONTINUE }));
+    pickMethod(/complete/i);
+    submit();
+    await waitFor(() => {
+      expect(screen.getByText("Measurement saved.")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Record another measurement" }));
+    // The reset returns to the preset task context (step 2, same shape).
+    expect(screen.getByText("Step 2 of 3 — method, values, and context")).toBeTruthy();
+    expect(screen.getByText("Heart rate", { exact: true })).toBeTruthy();
+  });
+
+  it("falls back to the default journey for an unknown preset shape id", () => {
+    render(<ManualCaptureFlow initialShapeId="SYNTH-shape-does-not-exist" />);
+    expect(screen.getByText("Step 1 of 3 — choose what you measured")).toBeTruthy();
+  });
+});
