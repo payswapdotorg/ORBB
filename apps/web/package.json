@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "ORBB web shell (M0-B): Next.js App Router foundation with role-aware navigation placeholders (Overview | Intents | Measurements | DataBox | Care | Research | Marketplace | Settings), accessibility foundations, and the Playwright smoke-journey harness. Consumes @orbb/ui design tokens. No real medical data, no backend calls.",
+  "description": "ORBB web shell: Next.js App Router consumer product — role-aware navigation, first-run onboarding and the intent journey (M6-A), the intent-driven Today measurement-task flow (M6-B B4), observation/provenance detail with device-import reconciliation (B5), and the DataBox timeline/collections search surface (B6). Consumes @orbb/ui design tokens and @orbb/measurement task types (type-only). No real medical data, no real backend calls.",
   "scripts": {
     "dev": "next dev --port 3100",
     "build": "next build",
@@ -14,6 +14,7 @@
     "e2e": "playwright test --project=chromium"
   },
   "dependencies": {
+    "@orbb/measurement": "workspace:*",
     "@orbb/ui": "workspace:*",
     "next": "^16.3.4",
     "react": "^19.3.0",

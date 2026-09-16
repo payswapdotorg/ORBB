@@ -1,4 +1,4 @@
-# Maestro — ORBB mobile journeys (M4-B copy, extended by M6-A)
+# Maestro — ORBB mobile journeys (M4-B copy, extended by M6-A and M6-B)
 
 This directory is the Lane-B-owned copy of the Maestro journey flows. It
 exists because of two constraints at this base:
@@ -13,7 +13,7 @@ exists because of two constraints at this base:
 2. The M4-B packet had to EXTEND the mobile journey with the capture flow
    (and the M6-A packet with the onboarding + intent flows).
 
-**Handoff to the integration station:** promote these four flows to the
+**Handoff to the integration station:** promote these six flows to the
 root `maestro/flows/` directory (replacing the mangled `smoke.yaml`),
 update `maestro/README.md`'s Files section, and delete this copy. The
 flows themselves are final.
@@ -23,8 +23,9 @@ flows themselves are final.
 - `flows/smoke.yaml` — the restored M0-B synthetic smoke journey (the
   contract documented in the root README): launch the Expo app, assert
   the five tab labels (`Today | Health | DataBox | Services | You`),
-  tap `DataBox`, assert the screen title and the `Coming in M6+`
-  placeholder notice.
+  tap `DataBox`, and assert the real B6 surface (a pinned-corpus entry
+  and the full-corpus count line — M6-B replaced the `Coming in M6+`
+  placeholder assertion, documented in the flow header).
 - `flows/capture.yaml` — the M4-B capture journey: launch, tap
   `Health`, drive the full manual capture flow (metric → manual method →
   systolic/diastolic values → review → quality self-assessment →
@@ -33,7 +34,8 @@ flows themselves are final.
 - `flows/onboarding.yaml` — the NEW M6-A onboarding journey: launch, drive
   the first-run flow on the Today tab (welcome → persona → metric
   interests → source registration summary → completion), and assert the
-  Today placeholder returns once the journey completes.
+  real M6-B Today surface renders once the journey completes (B4 replaced
+  the former placeholder — documented in the flow header).
 - `flows/intent.yaml` — the NEW M6-A intent creation + plan review journey
   (the golden journey #1 head on mobile): complete onboarding when
   visible, tap `Health`, drive the guided composer (metric → direction →
@@ -41,6 +43,17 @@ flows themselves are final.
   pack coverage summary, then review the candidate plan (explainability
   audit trail, burden summary, safety PASS badge, no-source drop audit)
   and approve with a reviewer note through the domain transition.
+- `flows/today.yaml` — the NEW M6-B Today/task-flow journey (B4):
+  complete onboarding when visible, assert the intent focus list and the
+  "What matters today" task cards (due window, methods with availability,
+  clinic/CHW fallback, the missed-window marker), then open the inline
+  manual-capture flow from a due task's completion button (step 1 picker
+  + the "Close without completing" affordance).
+- `flows/databox.yaml` — the NEW M6-B DataBox timeline/search journey
+  (B6): complete onboarding when visible, tap `DataBox`, assert the
+  timeline default (day groups, a pinned-corpus observation entry, the
+  full-corpus count line), narrow with free-text search (`heart` → 3 of
+  12 entries), and switch to the Collections view.
 
 ## Running locally
 
@@ -70,24 +83,28 @@ flows themselves are final.
    maestro test apps/mobile/maestro/flows/capture.yaml
    maestro test apps/mobile/maestro/flows/onboarding.yaml
    maestro test apps/mobile/maestro/flows/intent.yaml
+   maestro test apps/mobile/maestro/flows/today.yaml
+   maestro test apps/mobile/maestro/flows/databox.yaml
    ```
 
-## CI status at M6-A
+## CI status at M6-B
 
 Maestro is NOT run in CI — there is no emulator in the CI environment
 (unchanged since M0-B; see the root `maestro/README.md` and
 `.github/workflows/ci.yml`). `apps/mobile` is CI-typechecked
-(`tsc --noEmit`) and its pure capture + intent models and offline queue
-are unit-tested with vitest (`src/lib/capture/*.test.ts`,
-`src/lib/intents/*.test.ts`); the Maestro flows become a gate once a dev
+(`tsc --noEmit`) and its pure capture + intent + today + observations +
+databox models and offline queue are unit-tested with vitest
+(`src/lib/**/*.test.ts`); the Maestro flows become a gate once a dev
 build and device/emulator pool exist.
 
 ## Content policy
 
 The flows assert synthetic content only: the five architecture tab
-labels, the `Coming in M6+` placeholder notice, the M4-B capture
-journey's SYNTH-marked strings (`SYNTH-method-*` ids, the
-self-tracking provenance line, the quality-state labels), and the M6-A
-intent journey's SYNTH-marked strings (the pack hash fixture, the safety
-outcome labels, the draft-plan id slugs). No real medical data, no real
-credentials, no network mocks of real APIs.
+labels, the M4-B capture journey's SYNTH-marked strings (`SYNTH-method-*`
+ids, the self-tracking provenance line, the quality-state labels), the
+M6-A intent journey's SYNTH-marked strings (the pack hash fixture, the
+safety outcome labels, the draft-plan id slugs), and the M6-B
+Today/DataBox journeys' SYNTH-marked strings (the task-card fields,
+the clinic/CHW fallback vocabulary, the pinned corpus entries and count
+lines). No real medical data, no real credentials, no network mocks of
+real APIs.

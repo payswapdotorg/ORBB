@@ -97,17 +97,28 @@ interface SavedSummary {
   readonly qualityState: CaptureQualityState;
   readonly capturedLabel: string;
   readonly captureId: string;
+  readonly shapeId: string;
   readonly observationLines: readonly string[];
 }
 
 export interface ManualCaptureFlowProps {
   /** Fired after a capture is stored (drives the history refresh). */
-  onCaptured?: () => void;
+  onCaptured?: (result: { readonly captureId: string; readonly shapeId: string }) => void;
+  /**
+   * M6-B B4: the capture shape to preselect (the Today task-completion
+   * route). When provided, the flow starts at step 2 (method + values) with
+   * the metric chosen — the task card already told the person WHAT is due;
+   * Back returns to step 1 with the choice preserved. Absent -> unchanged
+   * M4-B behavior (step 1, nothing preselected).
+   */
+  readonly initialShapeId?: string;
 }
 
-export function ManualCaptureFlow({ onCaptured }: ManualCaptureFlowProps) {
-  const [step, setStep] = useState<CaptureStep>(1);
-  const [shapeId, setShapeId] = useState<string | undefined>(undefined);
+export function ManualCaptureFlow({ onCaptured, initialShapeId }: ManualCaptureFlowProps) {
+  const initialShape =
+    initialShapeId !== undefined ? findCaptureShape(initialShapeId) : undefined;
+  const [step, setStep] = useState<CaptureStep>(initialShape !== undefined ? 2 : 1);
+  const [shapeId, setShapeId] = useState<string | undefined>(initialShape?.id);
   const [metricError, setMetricError] = useState<string | undefined>(undefined);
   const [methodChosen, setMethodChosen] = useState(false);
   const [methodError, setMethodError] = useState<string | undefined>(undefined);
@@ -302,12 +313,13 @@ export function ManualCaptureFlow({ onCaptured }: ManualCaptureFlowProps) {
           qualityState: record.qualityState,
           capturedLabel: formatCapturedLabel(new Date(record.capturedAt), new Date()),
           captureId: record.captureId,
+          shapeId: shape.id,
           observationLines: record.observations.map(
             (observation) =>
               `${observation.metricLabel} ${observation.value} ${observation.unit} · method actually used: ${observation.methodId} · provenance actor: ${observation.provenance.actor} (self-tracking)`,
           ),
         });
-        onCaptured?.();
+        onCaptured?.({ captureId: record.captureId, shapeId: shape.id });
       } else if (!response.ok && isCaptureErrorEnvelope(payload)) {
         setFailed(true);
         setFeedback(`Could not save the measurement: ${payload.error.message}`);

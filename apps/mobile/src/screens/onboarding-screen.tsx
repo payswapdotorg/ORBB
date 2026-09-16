@@ -75,12 +75,15 @@ const METRIC_OPTIONS: readonly { shapeId: string; label: string; summary: string
 /** Source summary options (manual registered; seams display-only). */
 const SOURCE_OPTIONS: readonly {
   kind: "manual" | "device" | "app";
+  /** Stable unique key (the seam's method id; "manual" for the manual source). */
+  seamId: string;
   label: string;
   detail: string;
   connected: boolean;
 }[] = [
   {
     kind: "manual",
+    seamId: "SYNTH-source-manual",
     label: "Manual entry",
     detail:
       "Registered and active (src_SYNTH-source-manual). Provenance recorded with you as the actor.",
@@ -89,6 +92,11 @@ const SOURCE_OPTIONS: readonly {
   ...CAPTURE_SHAPES.flatMap((shape) =>
     shape.futureMethodOptions.map((option) => ({
       kind: (option.id.includes("app-") ? "app" : "device") as "app" | "device",
+      // The seam's method id is the stable unique key — several shapes
+      // share seam LABELS (e.g. "App import"), so the label can never be
+      // the React key (M6-B fix: duplicate-key warnings surfaced by the
+      // golden journeys).
+      seamId: option.id,
       label: option.label,
       detail: `${option.meta} — display only at this milestone.`,
       connected: false,
@@ -265,7 +273,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
             <View style={styles.optionGroup} accessibilityLabel="Sources">
               {SOURCE_OPTIONS.map((option) => (
                 <View
-                  key={option.label}
+                  key={option.seamId}
                   accessibilityLabel={`${option.label}, ${
                     option.connected ? "registered and active" : "not connected yet"
                   }`}

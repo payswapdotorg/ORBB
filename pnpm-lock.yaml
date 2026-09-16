@@ -106,6 +106,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@orbb/measurement':
+        specifier: workspace:*
+        version: link:../../packages/measurement
       '@orbb/ui':
         specifier: workspace:*
         version: link:../../packages/ui

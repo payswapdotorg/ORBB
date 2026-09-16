@@ -1,0 +1,57 @@
+# M6-B DataBox timeline/search journey (Lane B): the real DataBox surface —
+# the pinned SYNTH corpus timeline (day-grouped, status badges by text),
+# the full-corpus count line, free-text search narrowing to the heart-rate
+# entries, and the Collections view grouping.
+#
+# All asserted strings are SYNTH-marked or architectural labels; nothing
+# here is or resembles real PHI.
+#
+# The first-run onboarding quick-pass mirrors the intent journey's tolerant
+# prefix: the Today tab runs the M6-A onboarding on fresh installs
+# (session-scoped completion); on a resumed session the conditional block
+# is a no-op. The DataBox tab itself renders regardless of the gate.
+#
+# MAESTRO_APP_ID: the target app id on the device/emulator
+# (dev build: org.orbb.mobile; or the Expo Go host package id).
+appId: ${MAESTRO_APP_ID}
+name: ORBB databox journey (M6-B)
+tags:
+  - M6
+  - databox
+---
+- launchApp
+
+# First-run onboarding quick-pass (Person persona; metric/source steps
+# skipped via Continue — the same steps onboarding.yaml drives explicitly).
+- runFlow:
+    when:
+      visible: "Welcome to ORBB"
+    commands:
+      - tapOn: "Get started"
+      - tapOn:
+          text: "Person — tracking my own health"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Finish setup"
+
+# Enter the DataBox surface (the B6 tab).
+- tapOn: "DataBox"
+- assertVisible: "DataBox"
+
+# The timeline default: day-grouped pinned corpus with status badges.
+- assertVisible: "Today"
+- assertVisible: "Resting heart rate 62 beats/min"
+- assertVisible: "12 of 12 entries"
+
+# Free-text search narrows the corpus (3 heart-rate entries) and the count
+# line announces the honest filtered state.
+- tapOn:
+    text: "Search your DataBox"
+- inputText: "heart"
+- hideKeyboard
+- assertVisible: "3 of 12 entries"
+
+# The Collections view groups the same (filtered) corpus.
+- tapOn: "Collections"
+- assertVisible: "Vital signs monitoring"

@@ -47,5 +47,11 @@ tags:
 - assertVisible: "Person — tracking my own health"
 - tapOn: "Finish setup"
 
-# After completion the Today placeholder returns (session-scoped record).
-- assertVisible: "Coming in M6+"
+# After completion the real M6-B Today surface renders (session-scoped
+# completion): the intent-driven task flow replaces the former "Coming in
+# M6+" placeholder — intentional M6-B change, documented here (the same
+# default-surface change the web Overview made in this milestone).
+- assertVisible: "What you are working toward"
+- assertVisible: "What matters today"
+- assertVisible: "Blood Pressure Systolic"
+- assertVisible: "Due by end of today"

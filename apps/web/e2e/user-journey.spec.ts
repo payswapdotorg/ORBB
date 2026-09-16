@@ -27,6 +27,11 @@ test("evidence journey: sortable table, disclosure metadata, timeline view, emph
 }) => {
   await page.goto("/databox");
 
+  // M6-B B6: the DEFAULT presentation is now the timeline (+ collections);
+  // the evidence table is one click away in the view toggle. The journey
+  // below still exercises the sortable list exactly as before.
+  await page.getByRole("button", { name: "Evidence list" }).click();
+
   // The evidence table mounts with a caption and 8 synthetic rows.
   const table = page.getByRole("table");
   await expect(table).toBeVisible();
@@ -73,7 +78,9 @@ test("evidence journey: sortable table, disclosure metadata, timeline view, emph
   await expect(
     page.getByRole("button", { name: "Timeline", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByText("Today", { exact: true })).toBeVisible();
+  // The pinned day groups render (the time-filter's "Today" option is a
+  // select option — the timeline group header is the heading).
+  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
   await expect(page.getByText("Resting heart rate 62 beats/min")).toBeVisible();
   await expect(page.getByText("Validated", { exact: true }).first()).toBeVisible();
 
@@ -307,12 +314,17 @@ test("capture journey: record a manual measurement — metric, method, values, r
   const table = page.getByRole("table");
   await expect(table).toBeVisible();
   await expect(table.getByText("Blood pressure 118/76 mmHg")).toBeVisible();
-  await expect(table.getByText("Manual", { exact: true })).toBeVisible();
-  await expect(table.getByText("You (self-tracking)", { exact: true })).toBeVisible();
-  await expect(table.getByText(/Today, \d{2}:\d{2}/)).toBeVisible();
+  // The store is shared across journeys — badge texts may appear on more
+  // than one row; the first visible match is this journey's own.
+  await expect(table.getByText("Manual", { exact: true }).first()).toBeVisible();
+  await expect(table.getByText("You (self-tracking)", { exact: true }).first()).toBeVisible();
+  await expect(table.getByText(/Today, \d{2}:\d{2}/).first()).toBeVisible();
 
-  // The per-row disclosure reveals the provenance drawer.
-  const detailsToggle = page.getByRole("button", { name: /Details: SYNTH-CAP-/ });
+  // The per-row disclosure reveals the provenance drawer. Scoped to THIS
+  // journey's row (the in-memory store is shared across e2e workers, so
+  // other journeys' captures may render their own rows and ids).
+  const bpRow = page.getByRole("row").filter({ hasText: "Blood pressure 118/76 mmHg" });
+  const detailsToggle = bpRow.getByRole("button", { name: /Details: SYNTH-CAP-/ });
   await detailsToggle.click();
   await expect(page.getByText("Provenance actor", { exact: true })).toBeVisible();
   await expect(
@@ -352,10 +364,14 @@ test("capture journey: record a manual measurement — metric, method, values, r
   ).toBeVisible();
 
   // Both captures are in the history; the recorded qualities differ (never
-  // upgraded).
+  // upgraded). The store is process-global across e2e workers (the M6-B
+  // Today journey also completes captures), so this journey asserts its own
+  // captures by content plus a row minimum instead of an exact count.
   await expect(table.getByText("Blood pressure 118/76 mmHg")).toBeVisible();
   await expect(table.getByText("Heart rate 64 beats/min")).toBeVisible();
-  await expect(page.getByRole("row")).toHaveCount(3); // header + 2 captures
+  await expect
+    .poll(async () => page.getByRole("row").count())
+    .toBeGreaterThanOrEqual(3); // header + this journey's 2 captures
   await expect(table.getByText("Partial", { exact: true })).toBeVisible();
   await expect(table.getByText("Low quality", { exact: true })).toBeVisible();
 

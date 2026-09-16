@@ -57,9 +57,14 @@ export interface CaptureHistoryProps {
    * the history re-reads the store through the route.
    */
   readonly refreshToken: number;
+  /**
+   * M6-B B5: opens an observation's full provenance detail (the hosting
+   * workspace's decision — the per-row affordance below fires it).
+   */
+  readonly onOpenObservation?: (observationId: string) => void;
 }
 
-export function CaptureHistory({ refreshToken }: CaptureHistoryProps) {
+export function CaptureHistory({ refreshToken, onOpenObservation }: CaptureHistoryProps) {
   const [view, setView] = useState<HistoryView>("list");
   const [captures, setCaptures] = useState<readonly CaptureRecordDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -121,9 +126,16 @@ export function CaptureHistory({ refreshToken }: CaptureHistoryProps) {
               </DueWindow>
             ),
             provenance: (
-              <DueWindow tone="accent">You (self-tracking)</DueWindow>
+              <span className="flex flex-wrap items-center gap-1">
+                <DueWindow tone="accent">You (self-tracking)</DueWindow>
+              </span>
             ),
-            details: <CaptureDetailsPanel record={record} />,
+            details: (
+              <CaptureDetailsPanel
+                record={record}
+                {...(onOpenObservation !== undefined ? { onOpenObservation } : {})}
+              />
+            ),
           },
         }));
 
@@ -201,9 +213,17 @@ export function CaptureHistory({ refreshToken }: CaptureHistoryProps) {
 
 /**
  * Per-row provenance drawer (the architecture's Provenance UX contract:
- * captured by → method → quality → validation → capture metadata).
+ * captured by → method → quality → validation → capture metadata) — now
+ * with the B5 affordance: every observation id opens its FULL provenance
+ * detail (the §Provenance UX chain) on the same surface.
  */
-function CaptureDetailsPanel({ record }: { record: CaptureRecordDto }) {
+function CaptureDetailsPanel({
+  record,
+  onOpenObservation,
+}: {
+  readonly record: CaptureRecordDto;
+  readonly onOpenObservation?: (observationId: string) => void;
+}) {
   return (
     <DisclosurePanel id={`capture-details-${record.captureId}`} title={`Details: ${record.captureId}`}>
       <dl className="m-0 grid grid-cols-1 gap-2">
@@ -269,7 +289,20 @@ function CaptureDetailsPanel({ record }: { record: CaptureRecordDto }) {
             <ul className="m-0 flex list-disc flex-col gap-0.5 pl-5">
               {record.observations.map((observation) => (
                 <li key={observation.id} className="font-mono text-xs">
-                  {`${observation.id} (${observation.conceptCode})`}
+                  {onOpenObservation !== undefined ? (
+                    <button
+                      type="button"
+                      className="min-h-[44px] rounded-card text-left text-accent underline"
+                      aria-label={`View provenance detail of observation ${observation.id} (${observation.metricLabel})`}
+                      onClick={() => {
+                        onOpenObservation(observation.id);
+                      }}
+                    >
+                      {`${observation.id} (${observation.conceptCode}) — view provenance`}
+                    </button>
+                  ) : (
+                    <span>{`${observation.id} (${observation.conceptCode})`}</span>
+                  )}
                 </li>
               ))}
             </ul>

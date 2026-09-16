@@ -21,6 +21,11 @@ import {
 import { CaptureForm } from "./capture-form";
 import { CaptureHistory } from "./capture-history";
 import { IntentJourney } from "./intent-journey";
+import { ObservationDetailScreen } from "./observation-detail-screen";
+import {
+  captureRecordToDetail,
+  type ObservationDetailView,
+} from "../lib/observations/model";
 
 /**
  * Health surface (M4-B): the manual capture journey lands on the Health
@@ -42,6 +47,11 @@ import { IntentJourney } from "./intent-journey";
  * store (one observation per captured field, provenance actor = the
  * person, method actually used, pending validation) — the engine/API
  * wiring arrives at integration (recorded handoff).
+ *
+ * M6-B B5 (additive): capture-history rows become tappable and open the
+ * observation/provenance detail overlay (the B5 chain over the pure
+ * `captureRecordToDetail` projection) — rendered on top of the surface,
+ * closed by an explicit button. Every existing string stays identical.
  */
 
 type Feedback =
@@ -55,6 +65,7 @@ export function HealthScreen() {
   const [queue, setQueue] = useState<readonly QueuedCaptureDraft[]>([]);
   const [records, setRecords] = useState<readonly MobileCaptureRecord[]>([]);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [detail, setDetail] = useState<ObservationDetailView | null>(null);
   const counters = useRef<CaptureIdCounters>(initialCaptureIdCounters());
   const nextQueueId = useRef(0);
 
@@ -142,10 +153,11 @@ export function HealthScreen() {
   const now = new Date();
 
   return (
+    <View style={styles.screen}>
     <ScrollView
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
-      style={styles.screen}
+      style={styles.scroll}
     >
       <Text accessibilityRole="header" style={styles.title}>
         Health
@@ -212,7 +224,13 @@ export function HealthScreen() {
 
       <CaptureForm onSubmit={handleSubmit} />
 
-      <CaptureHistory records={records} now={now} />
+      <CaptureHistory
+        records={records}
+        now={now}
+        onOpenDetail={(record) => {
+          setDetail(captureRecordToDetail(record, now));
+        }}
+      />
 
       {/* M6-A: the intent journey (create -> review candidate plan ->
           approve/reject) lands below the capture journey on the Health
@@ -225,12 +243,25 @@ export function HealthScreen() {
         network calls. Provenance is recorded for every observation.
       </Text>
     </ScrollView>
+
+      {detail !== null ? (
+        <ObservationDetailScreen
+          detail={detail}
+          onClose={() => {
+            setDetail(null);
+          }}
+        />
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     backgroundColor: color.canvas,
+    flex: 1,
+  },
+  scroll: {
     flex: 1,
   },
   content: {

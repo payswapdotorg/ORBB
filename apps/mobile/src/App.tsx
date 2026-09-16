@@ -7,20 +7,24 @@ import { TABS } from "./navigation/tabs";
 import { PlaceholderScreen, TAB_BAR_HEIGHT } from "./screens/placeholder-screen";
 import { HealthScreen } from "./screens/health-screen";
 import { OnboardingScreen } from "./screens/onboarding-screen";
+import { TodayScreen } from "./screens/today-screen";
+import { DataboxScreen } from "./screens/databox-screen";
 import { color, typography } from "@orbb/ui/tokens";
 
 /**
- * ORBB mobile shell (M0-B, extended by M4-B and M6-A).
+ * ORBB mobile shell (M0-B, extended by M4-B, M6-A and M6-B).
  *
  * A five-destination bottom-tab navigator exactly per the frozen
  * architecture: `Today | Health | DataBox | Services | You`.
  *   - Today carries the FIRST-RUN ONBOARDING journey (M6-A: welcome,
  *     persona, metric interests, source summary) until it completes; the
  *     completed state is session-scoped (AsyncStorage lands at
- *     integration — recorded handoff), then the placeholder returns.
+ *     integration — recorded handoff), then M6-B B4 renders the real
+ *     intent-driven Today surface (task flow + inline capture).
  *   - Health carries the real manual-capture journey (M4-B) plus the
- *     intent journey (M6-A: create intent -> review candidate plan ->
- *     approve/reject with the local model mirror).
+ *     intent journey (M6-A) and the B5 provenance detail affordances.
+ *   - DataBox carries the real B6 surface: pinned corpus timeline /
+ *     collections with search + the four filters, and B5 provenance links.
  * Tab icons are simple text glyphs; tab labels double as accessibility
  * labels.
  *
@@ -75,11 +79,16 @@ export default function App() {
               if (tab.key === "today" && !onboardingComplete) {
                 return <OnboardingScreen onComplete={() => setOnboardingComplete(true)} />;
               }
-              return tab.key === "health" ? (
-                <HealthScreen />
-              ) : (
-                <PlaceholderScreen title={tab.label} note={tab.note} />
-              );
+              if (tab.key === "health") {
+                return <HealthScreen />;
+              }
+              if (tab.key === "today") {
+                return <TodayScreen />;
+              }
+              if (tab.key === "databox") {
+                return <DataboxScreen />;
+              }
+              return <PlaceholderScreen title={tab.label} note={tab.note} />;
             }}
           </Tab.Screen>
         ))}
