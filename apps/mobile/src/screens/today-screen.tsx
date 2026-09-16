@@ -14,6 +14,15 @@ import {
   type MobileCaptureSubmission,
 } from "../lib/capture/model";
 import {
+  todayConfiguredPolicyVariant,
+  todayDefaultPosture,
+  type TodayAdherencePostureView,
+} from "../lib/adherence/model";
+import {
+  listTodayReminders,
+  type TodayReminderView,
+} from "../lib/reminders/model";
+import {
   completeTodayTask,
   initialTodaySession,
   listTodayIntents,
@@ -63,7 +72,7 @@ function stateTextOf(task: TodayTaskView): string {
 }
 
 /** One accessibility label summarizing the WHOLE card (screen readers). */
-function taskAccessibilityLabel(task: TodayTaskView): string {
+function taskAccessibilityLabel(task: TodayTaskView, reminder?: TodayReminderView): string {
   const methods = task.methods
     .map(
       (method) =>
@@ -72,6 +81,10 @@ function taskAccessibilityLabel(task: TodayTaskView): string {
         }`,
     )
     .join("; ");
+  const reminderLine =
+    reminder !== undefined
+      ? ` Reminder ${reminder.rung === "REMIND" ? "scheduled" : "sent with fallback options offered"}.`
+      : "";
   const completion =
     task.completion !== undefined
       ? ` Completed through capture ${task.completion.captureId} — ${task.completion.observationIds.length} observation${
@@ -83,6 +96,7 @@ function taskAccessibilityLabel(task: TodayTaskView): string {
     `${task.methodCountLabel} — least burden first: ${methods}, ` +
     `estimated effort ${task.estimatedEffortLabel}, privacy impact: ${task.privacyImpactLabel}, ` +
     `fallback ${task.fallback.label}, providers ${task.fallback.providers.join(", ")}.` +
+    reminderLine +
     completion
   );
 }
@@ -91,10 +105,16 @@ export function TodayScreen() {
   const [session, setSession] = useState<TodaySession>(() => initialTodaySession(new Date()));
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState<string | null>(null);
+  const [optionsTaskId, setOptionsTaskId] = useState<string | null>(null);
+  const [variantOpen, setVariantOpen] = useState(false);
 
   const now = new Date();
   const intents = listTodayIntents(session, now);
   const tasks = listTodayTasks(session, now);
+  const reminders = listTodayReminders(session, tasks, now);
+  const reminderByTask = new Map(reminders.map((reminder) => [reminder.taskId, reminder]));
+  const posture: TodayAdherencePostureView = todayDefaultPosture(session);
+  const fixtureVariant: TodayAdherencePostureView = todayConfiguredPolicyVariant(session);
   const openTasks = tasks.filter((task) => task.state === "open");
   const activeTask = tasks.find((task) => task.taskId === activeTaskId) ?? null;
 
@@ -213,10 +233,105 @@ export function TodayScreen() {
             <TaskCard
               key={task.taskId}
               task={task}
+              reminder={reminderByTask.get(task.taskId)}
+              optionsOpen={optionsTaskId === task.taskId}
+              onToggleOptions={(taskId) => {
+                setOptionsTaskId((current) => (current === taskId ? null : taskId));
+              }}
               completing={task.taskId === activeTaskId}
               onComplete={handleCompletePress}
             />
           ))}
+        </View>
+      </View>
+
+      <View style={styles.postureSection}>
+        <Text accessibilityRole="header" style={styles.cardTitle}>
+          What happens when you miss a measurement
+        </Text>
+        <View style={styles.card}>
+          <Text
+            accessibilityLabel={posture.defaultLine}
+            style={styles.postureDefaultLine}
+          >
+            {posture.defaultLine}
+          </Text>
+          <Text style={styles.cardNote}>{posture.summaryLine}</Text>
+          <Text style={styles.postureVariantLabel}>{posture.variantLabel}</Text>
+          <View style={styles.decisionBlock}>
+            <Text style={styles.decisionKind}>
+              {`Decision: ${posture.decision.kind} — ${posture.decision.decisionLabel}`}
+            </Text>
+            {posture.decision.reason !== undefined ? (
+              <Text style={styles.cardNote}>{`reason: ${posture.decision.reason}`}</Text>
+            ) : null}
+            <Text style={styles.cardNote}>
+              {`evaluated task: ${posture.decision.evaluation.taskId} — adherence state ${posture.decision.evaluation.state} (${posture.decision.evaluation.reason})`}
+            </Text>
+            <Text style={styles.auditLine}>
+              {`audit steps: ${posture.decision.auditSteps
+                .map((step) => `${step.step}${step.detail !== undefined ? ` (${step.detail})` : ""}`)
+                .join(" -> ")}`}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="View the configured-policy fixture variant (SYNTH)"
+            accessibilityState={{ expanded: variantOpen }}
+            onPress={() => {
+              setVariantOpen((open) => !open);
+            }}
+            style={styles.variantToggle}
+          >
+            <Text style={styles.variantToggleText}>
+              {variantOpen
+                ? "Hide the configured-policy fixture variant (SYNTH)"
+                : "View the configured-policy fixture variant (SYNTH)"}
+            </Text>
+          </Pressable>
+          {variantOpen ? (
+            <View style={styles.variantBlock}>
+              <Text style={styles.postureVariantLabel}>
+                {fixtureVariant.variantLabel}
+              </Text>
+              <Text style={styles.cardNote}>{fixtureVariant.defaultLine}</Text>
+              <Text style={styles.cardNote}>{fixtureVariant.summaryLine}</Text>
+              {fixtureVariant.policy !== undefined ? (
+                <View style={styles.decisionBlock}>
+                  <Text style={styles.decisionKind}>The configured policy (every field)</Text>
+                  <Text style={styles.cardNote}>
+                    {`${fixtureVariant.policy.policyId} · v${fixtureVariant.policy.version} · ${fixtureVariant.policy.capability} — ${fixtureVariant.policy.capabilityLabel}`}
+                  </Text>
+                  <Text style={styles.cardNote}>
+                    {`triggerOn: ${fixtureVariant.policy.triggerOn} (the only legal trigger — recovery is never punished)`}
+                  </Text>
+                  <Text style={styles.cardNote}>
+                    {`authorization: ${fixtureVariant.policy.authorization.permissions.join(", ")}${
+                      fixtureVariant.policy.authorization.grantId !== undefined
+                        ? ` · pinned grant: ${fixtureVariant.policy.authorization.grantId}`
+                        : ""
+                    }`}
+                  </Text>
+                  <Text style={styles.cardNote}>{fixtureVariant.policy.durationLabel}</Text>
+                </View>
+              ) : null}
+              <View style={styles.decisionBlock}>
+                <Text style={styles.decisionKind}>
+                  {`Decision: ${fixtureVariant.decision.kind} — ${fixtureVariant.decision.decisionLabel}`}
+                </Text>
+                {fixtureVariant.decision.restriction !== undefined ? (
+                  <Text style={styles.cardNote}>
+                    {`restriction token ${fixtureVariant.decision.restriction.decisionId} · authorization verified · ${fixtureVariant.decision.restriction.durationLabel}`}
+                  </Text>
+                ) : null}
+                <Text style={styles.auditLine}>
+                  {`audit steps: ${fixtureVariant.decision.auditSteps
+                    .map((step) => `${step.step}${step.detail !== undefined ? ` (${step.detail})` : ""}`)
+                    .join(" -> ")}`}
+                </Text>
+              </View>
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -260,18 +375,28 @@ export function TodayScreen() {
 
 function TaskCard({
   task,
+  reminder,
+  optionsOpen,
+  onToggleOptions,
   completing,
   onComplete,
 }: {
   readonly task: TodayTaskView;
+  /** The journey-#7 reminder state (the B8 ladder mirror), if any. */
+  readonly reminder?: TodayReminderView | undefined;
+  /** True while this task's fallback-options panel is expanded. */
+  readonly optionsOpen: boolean;
+  /** Fired when the person toggles the fallback-options disclosure. */
+  readonly onToggleOptions: (taskId: string) => void;
   /** True while this task's capture flow is mounted below. */
   readonly completing: boolean;
   readonly onComplete: (task: TodayTaskView) => void;
 }) {
   const completed = task.state === "completed";
+  const offer = reminder?.fallbackOffer;
   return (
     <View
-      accessibilityLabel={taskAccessibilityLabel(task)}
+      accessibilityLabel={taskAccessibilityLabel(task, reminder)}
       style={[styles.card, completing ? styles.cardActive : null]}
     >
       <View style={styles.taskHeader}>
@@ -280,7 +405,21 @@ function TaskCard({
           {stateTextOf(task)}
         </Text>
         <Text style={styles.dueWindowBadge}>{task.dueWindowLabel}</Text>
+        {reminder !== undefined ? (
+          <Text style={styles.reminderBadge}>{reminder.reminderLabel}</Text>
+        ) : null}
       </View>
+
+      {reminder !== undefined ? (
+        <View>
+          <Text style={styles.reminderLine}>{reminder.detailLabel}</Text>
+          {reminder.defer !== undefined ? (
+            <Text style={styles.reminderNote}>
+              {`Quiet hours ${reminder.quietHoursLabel} — ${reminder.defer.label} (the reminder is deferred, never dropped).`}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
 
       <Text style={styles.taskReason}>{task.reason}</Text>
 
@@ -309,6 +448,54 @@ function TaskCard({
         <Text style={styles.fallbackDetail}>{`Providers: ${task.fallback.providers.join(" · ")}`}</Text>
         <Text style={styles.fallbackDetail}>{task.fallback.detail}</Text>
       </View>
+
+      {offer !== undefined ? (
+        <View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`View fallback options for ${task.metricLabel}`}
+            accessibilityState={{ expanded: optionsOpen }}
+            onPress={() => {
+              onToggleOptions(task.taskId);
+            }}
+            style={styles.optionsToggle}
+          >
+            <Text style={styles.optionsToggleText}>
+              {optionsOpen ? "Hide options" : "View options"}
+            </Text>
+          </Pressable>
+          {optionsOpen ? (
+            <View style={styles.optionsBlock}>
+              <Text style={styles.fallbackTitle}>
+                Fallback options — offered, never ordered.
+              </Text>
+              <Text style={styles.fallbackDetail}>
+                {`The reminder's offer is the method vocabulary recorded on your task (preferred first): ${offer.methods
+                  .map((method) => `${method.methodLabel} (${method.role}, ${method.methodId})`)
+                  .join(" · ")}.`}
+              </Text>
+              <Text style={styles.fallbackDetail}>
+                {`Enforcement authority: ${offer.enforcementAuthority} — a reminder never orders a provider and never applies a restriction.`}
+              </Text>
+              <Text style={styles.fallbackDetail}>
+                {`Provider path: ${task.fallback.providers.join(" · ")} — ${task.fallback.detail} Arranging a provider capture arrives with the Services marketplace; this offer is data only.`}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Capture ${task.metricLabel} now — ${task.primaryRouteLabel}, ${task.estimatedEffortLabel}`}
+                onPress={() => {
+                  onComplete(task);
+                }}
+                style={styles.completeButton}
+              >
+                <Text style={styles.completeButtonText}>
+                  {`Capture now — ${task.primaryRouteLabel}`}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
 
       {completed && task.completion !== undefined ? (
         <Text style={styles.completionLine}>
@@ -347,6 +534,108 @@ const styles = StyleSheet.create({
     gap: spacing[4],
     padding: spacing[4],
     paddingBottom: spacing[6],
+  },
+  postureSection: {
+    gap: spacing[3],
+  },
+  postureDefaultLine: {
+    color: color.fgPrimary,
+    flex: 1,
+    fontSize: typography.size.md,
+    fontWeight: "600" as const,
+    lineHeight: typography.size.md * typography.lineHeight.normal,
+  },
+  postureVariantLabel: {
+    color: color.fgPrimary,
+    fontSize: typography.size.sm,
+    fontWeight: "500" as const,
+    lineHeight: typography.size.sm * typography.lineHeight.normal,
+  },
+  decisionBlock: {
+    backgroundColor: color.canvas,
+    borderColor: color.borderSubtle,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: spacing[1],
+    padding: spacing[3],
+  },
+  decisionKind: {
+    color: color.fgPrimary,
+    fontSize: typography.size.sm,
+    fontWeight: "600" as const,
+    lineHeight: typography.size.sm * typography.lineHeight.normal,
+  },
+  auditLine: {
+    color: color.fgMuted,
+    fontSize: typography.size.xs,
+    lineHeight: typography.size.xs * typography.lineHeight.normal,
+  },
+  variantToggle: {
+    alignItems: "center",
+    borderColor: color.borderStrong,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: touchTarget.minimum,
+    paddingHorizontal: spacing[5],
+  },
+  variantToggleText: {
+    color: color.accent,
+    fontSize: typography.size.sm,
+    fontWeight: "600" as const,
+    textAlign: "center" as const,
+  },
+  variantBlock: {
+    borderColor: color.borderSubtle,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: spacing[2],
+    padding: spacing[3],
+  },
+  reminderBadge: {
+    backgroundColor: color.canvas,
+    borderColor: color.borderSubtle,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    color: color.fgMuted,
+    fontSize: typography.size.xs,
+    fontWeight: "500" as const,
+    lineHeight: typography.size.xs * typography.lineHeight.normal,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+  },
+  reminderLine: {
+    color: color.fgMuted,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * typography.lineHeight.normal,
+  },
+  reminderNote: {
+    color: color.fgMuted,
+    fontSize: typography.size.xs,
+    lineHeight: typography.size.xs * typography.lineHeight.normal,
+  },
+  optionsToggle: {
+    alignItems: "center",
+    backgroundColor: color.surface,
+    borderColor: color.borderStrong,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: touchTarget.minimum,
+    paddingHorizontal: spacing[5],
+  },
+  optionsToggleText: {
+    color: color.accent,
+    fontSize: typography.size.sm,
+    fontWeight: "600" as const,
+  },
+  optionsBlock: {
+    backgroundColor: color.canvas,
+    borderColor: color.borderSubtle,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: spacing[1],
+    padding: spacing[3],
   },
   title: {
     color: color.fgPrimary,

@@ -13,7 +13,7 @@ exists because of two constraints at this base:
 2. The M4-B packet had to EXTEND the mobile journey with the capture flow
    (and the M6-A packet with the onboarding + intent flows).
 
-**Handoff to the integration station:** promote these six flows to the
+**Handoff to the integration station:** promote these seven flows to the
 root `maestro/flows/` directory (replacing the mangled `smoke.yaml`),
 update `maestro/README.md`'s Files section, and delete this copy. The
 flows themselves are final.
@@ -54,6 +54,17 @@ flows themselves are final.
   timeline default (day groups, a pinned-corpus observation entry, the
   full-corpus count line), narrow with free-text search (`heart` → 3 of
   12 entries), and switch to the Collections view.
+- `flows/journey7.yaml` — the NEW M6-EXIT golden-journey-#7 mobile leg:
+  complete onboarding when visible, then assert the Today screen's
+  missed-task reminder state (rung REMIND_WITH_FALLBACK_OFFER, sent
+  yesterday at 10:00) and the due task's quiet-hours-deferred rung-REMIND
+  reminder ("deferred to 07:00" — deferred, never dropped); open the
+  fallback-options panel through the explicit "View options" action (the
+  offer is DATA, never an order; enforcement authority "none" shown);
+  assert the observe-only restriction posture ("No restrictions are
+  configured — nothing happens when you miss a measurement.") and the
+  configured-policy SYNTH fixture variant behind its explicit disclosure
+  (restriction-authorized only under policy + authorization grant).
 
 ## Running locally
 
@@ -85,6 +96,7 @@ flows themselves are final.
    maestro test apps/mobile/maestro/flows/intent.yaml
    maestro test apps/mobile/maestro/flows/today.yaml
    maestro test apps/mobile/maestro/flows/databox.yaml
+   maestro test apps/mobile/maestro/flows/journey7.yaml
    ```
 
 ## CI status at M6-B
@@ -92,10 +104,10 @@ flows themselves are final.
 Maestro is NOT run in CI — there is no emulator in the CI environment
 (unchanged since M0-B; see the root `maestro/README.md` and
 `.github/workflows/ci.yml`). `apps/mobile` is CI-typechecked
-(`tsc --noEmit`) and its pure capture + intent + today + observations +
-databox models and offline queue are unit-tested with vitest
-(`src/lib/**/*.test.ts`); the Maestro flows become a gate once a dev
-build and device/emulator pool exist.
+(`tsc --noEmit`) and its pure capture + intent + today + reminders +
+adherence + observations + databox models and offline queue are
+unit-tested with vitest (`src/lib/**/*.test.ts`); the Maestro flows
+become a gate once a dev build and device/emulator pool exist.
 
 ## Content policy
 

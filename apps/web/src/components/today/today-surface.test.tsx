@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { TodaySurface } from "./today-surface";
 import type { TodayIntentSummary, TodayTaskView } from "@/lib/today/types";
 
@@ -19,6 +19,161 @@ afterEach(() => {
 
 /** The fetch signature the surface reads/writes through. */
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+/** A rung-2 (missed) reminder fixture for the weight task. */
+function weightReminder() {
+  return {
+    reminderId: "remd_SYNTH-today-wt-000003-fallback-offer",
+    rung: "REMIND_WITH_FALLBACK_OFFER" as const,
+    taskId: "task_SYNTH-today-wt-000003",
+    planId: "plan_SYNTH-today-wt-mornings-0003",
+    metricId: "SYNTH-metric-body-weight",
+    metricLabel: "Body Weight",
+    window: {
+      sequence: 0,
+      startsAt: "2025-09-14T07:00:00.000Z",
+      endsAt: "2025-09-14T09:00:00.000Z",
+    },
+    scheduledAt: "2025-09-14T10:00:00.000Z",
+    deliveryState: "delivered" as const,
+    reminderLabel: "Reminder sent — fallback options offered",
+    detailLabel: "Rung REMIND_WITH_FALLBACK_OFFER · sent yesterday at 10:00",
+    quietHoursLabel: "22:00–07:00",
+    fallbackOffer: {
+      enforcementAuthority: "none" as const,
+      methods: [
+        {
+          methodId: "SYNTH-method-manual-body-weight",
+          methodLabel: "Manual entry — scale reading",
+          role: "preferred" as const,
+        },
+      ],
+    },
+  };
+}
+
+/** A rung-1 (due) reminder fixture with the honest quiet-hours deferral. */
+function bpReminder() {
+  return {
+    reminderId: "remd_SYNTH-today-bp-000001-remind",
+    rung: "REMIND" as const,
+    taskId: "task_SYNTH-today-bp-000001",
+    planId: "plan_SYNTH-today-bp-daily-0001",
+    metricId: "SYNTH-metric-bp-systolic",
+    metricLabel: "Blood Pressure Systolic",
+    window: {
+      sequence: 0,
+      startsAt: "2025-09-15T00:00:00.000Z",
+      endsAt: "2025-09-15T23:59:59.999Z",
+    },
+    scheduledAt: "2025-09-16T07:00:00.000Z",
+    deliveryState: "scheduled" as const,
+    reminderLabel: "Reminder scheduled",
+    detailLabel: "Rung REMIND · quiet hours 22:00–07:00 — deferred to 07:00",
+    defer: {
+      from: "2025-09-15T22:59:59.999Z",
+      reason: "quiet-hours" as const,
+      label: "deferred to 07:00",
+    },
+    quietHoursLabel: "22:00–07:00",
+  };
+}
+
+/** The default observe-only posture fixture. */
+function defaultPosturePayload() {
+  return {
+    variant: "observe-only" as const,
+    variantLabel: "Restriction posture: observe-only (the default)",
+    defaultLine:
+      "No restrictions are configured — nothing happens when you miss a measurement.",
+    summaryLine:
+      "Missing a measurement records adherence state and nothing else.",
+    decision: {
+      kind: "no-enforcement" as const,
+      reason: "no-policy",
+      decisionLabel: "Observe-only — nothing restrictive happens",
+      evaluation: {
+        taskId: "task_SYNTH-today-wt-000003",
+        state: "missed",
+        reason: "window-elapsed",
+        evaluatedAtIso: "2025-09-14T10:00:00.000Z",
+        auditSteps: [
+          { step: "task-state", detail: "open" },
+          { step: "window-elapsed-check", detail: "endsAt<=now" },
+        ],
+      },
+      auditSteps: [{ step: "policy-resolution", detail: "absent:policy" }],
+    },
+  };
+}
+
+/** The configured-policy fixture variant payload. */
+function configuredVariantPayload() {
+  return {
+    variant: "configured-policy" as const,
+    variantLabel: "Restriction posture: configured policy (SYNTH fixture variant)",
+    defaultLine:
+      "SYNTH fixture variant — demonstrates the vocabulary only. No policy is configured for you.",
+    summaryLine: "What the posture looks like when every gate passes.",
+    decision: {
+      kind: "restriction-authorized" as const,
+      decisionLabel:
+        "Restriction authorized — under an explicit, authorized, configured policy only",
+      evaluation: {
+        taskId: "task_SYNTH-today-wt-000003",
+        state: "missed",
+        reason: "window-elapsed",
+        evaluatedAtIso: "2025-09-14T10:00:00.000Z",
+        auditSteps: [{ step: "task-state", detail: "open" }],
+      },
+      restriction: {
+        kind: "orbb/adherence/restriction-decision/v1",
+        decisionId: "SYNTH-DECISION-evening-focus-wt-0001",
+        policyId: "SYNTH-policy-evening-focus-0001",
+        policyVersion: 1,
+        capability: "ios-focus",
+        authorization: {
+          permission: "adherence:restrict:ios-focus",
+          verifiedAtIso: "2025-09-14T10:00:00.000Z",
+        },
+        scope: {
+          personId: "prsn_SYNTH-person-0001",
+          planId: "plan_SYNTH-today-wt-mornings-0003",
+          metricId: "SYNTH-metric-body-weight",
+        },
+        detection: { state: "available" },
+        decidedAtIso: "2025-09-14T10:00:00.000Z",
+        expiresAtIso: "2025-09-14T12:00:00.000Z",
+      },
+      auditSteps: [
+        { step: "policy-resolution", detail: "SYNTH-policy-evening-focus-0001:v1:ios-focus" },
+        { step: "trigger-evaluation", detail: "state=missed" },
+        { step: "scope-check", detail: "in-scope" },
+        { step: "authorization-gate", detail: "authorized" },
+        { step: "capability-detection", detail: "state=available" },
+        { step: "restriction-authorized", detail: "ios-focus" },
+      ],
+    },
+    policy: {
+      policyId: "SYNTH-policy-evening-focus-0001",
+      version: 1,
+      capability: "ios-focus",
+      capabilityLabel: "iOS Focus (SYNTH OS seam)",
+      triggerOn: "missed" as const,
+      authorization: {
+        permissions: ["adherence:restrict:ios-focus"],
+        grantId: "grant_SYNTH-adherence-demo-0001",
+      },
+      scope: {
+        personIds: ["prsn_SYNTH-person-0001"],
+        planIds: ["plan_SYNTH-today-wt-mornings-0003"],
+        metricIds: ["SYNTH-metric-body-weight"],
+      },
+      restriction: { durationMs: 7_200_000 },
+      durationLabel: "2 hours (bounded — restrictions are at most 24 hours)",
+    },
+  };
+}
 
 function intent(overrides: Partial<TodayIntentSummary> = {}): TodayIntentSummary {
   return {
@@ -172,9 +327,57 @@ function captureSubmitResponse(): Response {
   );
 }
 
-function stubFetchWith(responses: Response[]): ReturnType<typeof vi.fn<FetchLike>> {
+/**
+ * URL-aware fetch stub: the journey-#7 chain routes (`/api/today/reminders`,
+ * `/api/today/adherence`) serve their fixture payloads; every other URL
+ * consumes the sequenced responses exactly like the original stub (the
+ * today board GET + the capture/complete POSTs).
+ */
+function stubFetchWith(
+  responses: Response[],
+  chain: {
+    reminders?: Response;
+    adherence?: Response;
+  } = {},
+): ReturnType<typeof vi.fn<FetchLike>> {
   let call = 0;
-  const fetchMock = vi.fn<FetchLike>(async () => {
+  const fetchMock = vi.fn<FetchLike>(async (input: RequestInfo | URL) => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+    if (url === "/api/today/reminders") {
+      return (
+        chain.reminders ??
+        new Response(
+          JSON.stringify({
+            synthetic: true,
+            personId: "prsn_SYNTH-person-0001",
+            reminders: [],
+            quietHoursLabel: "22:00–07:00",
+            generatedAt: "2025-09-15T14:00:00.000Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        )
+      );
+    }
+    if (url === "/api/today/adherence") {
+      return (
+        chain.adherence ??
+        new Response(
+          JSON.stringify({
+            synthetic: true,
+            personId: "prsn_SYNTH-person-0001",
+            posture: defaultPosturePayload(),
+            fixtureVariant: configuredVariantPayload(),
+            generatedAt: "2025-09-15T14:00:00.000Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        )
+      );
+    }
     const response = responses[Math.min(call, responses.length - 1)] ?? responses[0]!;
     call += 1;
     return response;
@@ -301,5 +504,92 @@ describe("TodaySurface (the intent-driven board)", () => {
     await waitFor(() => {
       expect(screen.getByText(/Could not load today's plan/)).toBeTruthy();
     });
+  });
+
+  it("degrades gracefully when the reminder chain read fails (task board unaffected)", async () => {
+    stubFetchWith([listResponse([task()], [intent()])], {
+      reminders: new Response(JSON.stringify({ synthetic: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    });
+    render(<TodaySurface />);
+    await waitFor(() => {
+      expect(screen.getByText("Blood Pressure Systolic")).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Reminder state could not be loaded — the task list is unaffected/),
+      ).toBeTruthy();
+    });
+    // The task board still renders its cards.
+    expect(screen.getByText("Due by end of today")).toBeTruthy();
+  });
+
+  it("renders the journey-#7 chain: reminders, fallback offer, and the posture surface", async () => {
+    const missed = task({
+      taskId: "task_SYNTH-today-wt-000003",
+      planId: "plan_SYNTH-today-wt-mornings-0003",
+      metricLabel: "Body Weight",
+      missedWindow: true,
+      dueWindowLabel: "Window missed — was due yesterday at 09:00",
+    });
+    stubFetchWith([listResponse([task(), missed], [intent()])], {
+      reminders: new Response(
+        JSON.stringify({
+          synthetic: true,
+          personId: "prsn_SYNTH-person-0001",
+          reminders: [weightReminder(), bpReminder()],
+          quietHoursLabel: "22:00–07:00",
+          generatedAt: "2025-09-15T14:00:00.000Z",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    });
+    render(<TodaySurface />);
+    await waitFor(() => {
+      expect(screen.getByText("What you are working toward")).toBeTruthy();
+    });
+
+    // The missed card carries the rung-2 reminder line + offer affordance.
+    const missedCard = screen
+      .getByText("Window missed", { exact: true })
+      .closest("li");
+    expect(missedCard).toBeTruthy();
+    expect(
+      within(missedCard as HTMLElement).getByText(
+        "Reminder sent — fallback options offered",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(missedCard as HTMLElement).getByText(
+        "Rung REMIND_WITH_FALLBACK_OFFER · sent yesterday at 10:00",
+      ),
+    ).toBeTruthy();
+
+    // The due card carries the rung-1 reminder with the honest deferral.
+    expect(screen.getByText("Reminder scheduled")).toBeTruthy();
+    expect(
+      screen.getByText(/Rung REMIND · quiet hours 22:00–07:00 — deferred to 07:00/),
+    ).toBeTruthy();
+
+    // The restriction-posture surface mounts with the loudest default truth.
+    expect(
+      screen.getByText(
+        "No restrictions are configured — nothing happens when you miss a measurement.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("Restriction posture: observe-only (the default)")).toBeTruthy();
+
+    // The configured-policy fixture variant sits behind its disclosure.
+    const variantToggle = screen.getByRole("button", {
+      name: "View the configured-policy fixture variant (SYNTH)",
+    });
+    expect(variantToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(variantToggle);
+    expect(screen.getByText("The configured policy (every field)")).toBeTruthy();
+    expect(
+      screen.getByText(/Decision: restriction-authorized — Restriction authorized/),
+    ).toBeTruthy();
   });
 });

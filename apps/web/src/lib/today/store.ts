@@ -428,6 +428,18 @@ export function listTodayTasks(now: Date): readonly TodayTaskView[] {
     .map((entry) => entry.view);
 }
 
+/**
+ * Lists the STORED task records (the REAL A30 scheduler snapshots plus
+ * completion side-records), in insertion order — the read seam the M6-exit
+ * reminder chain derives its fixture reminders from (the mirrored B8
+ * engine consumes task snapshots the same way). Seeds deterministically
+ * on first read; read-only projection: callers never mutate the records.
+ */
+export function listTodayTaskRecords(now: Date): readonly TodayTaskRecord[] {
+  seedTasks(now);
+  return [...taskRecords.values()];
+}
+
 /** Lists the active-intent summaries with per-intent progress. */
 export function listTodayIntents(now: Date): readonly TodayIntentSummary[] {
   seedTasks(now);
