@@ -1,10 +1,10 @@
 # ORBB Orchestration Status
 
-current_milestone: M6 — consumer product (B1-B10 ALL COMPLETE; M6 EXIT in flight)
+current_milestone: M6 — CLOSED (B1-B10 + EXIT complete; M7 Clinical OS next)
 architecture_status: FROZEN FOR IMPLEMENTATION
-implementation_status: M0-M5 COMPLETE (PRs #4-#21); M6-A (PR #22) + B4/B5/B6 + B8 + B10 + B7/B9 COMPLETE (merges 898b574, bd5606f, dd022c0, 963bbb5)
-active_worker_slots: 1/3 (M6 EXIT: journey #7 + exit harness dispatching; then lead dogfood + milestone close)
-latest_green_commit: 963bbb5 (M6-C B7/B9 sharing+consent merge — battery all-0, e2e 9/9 with golden journey #4)
+implementation_status: M0-M6 COMPLETE (M6: PR #22 + merges 898b574, bd5606f, dd022c0, 963bbb5, f6c5ee9 incl EXIT); M7 next
+active_worker_slots: 0/3 (M6 closed; M7-A wave packets staged — org model, FHIR mapper, SMART launch)
+latest_green_commit: f6c5ee9 (M6 EXIT merge — battery all-0, e2e 17/17 incl golden journeys #1 #2 #4 #7 + exit harness)
 preview_url: none (Vercel preview pending operator account link; web shell dogfooded locally by lead)
 last_dogfood: 2026-09-10 18:5x UTC — lead exercised the web shell end-to-end (role switch, emphasis, DataBox journey; VLM-verified screenshots)
 last_audit: 2026-09-15 — repo-truth audit by resident tech lead (STATUS resynced to merged PR #22; was stale pre-merge)
@@ -37,7 +37,10 @@ merged_in_M2:
 - M2 EXIT verified on fresh main 1eca964: frozen install 0, lint 16/16, typecheck 16/16, test 785 passed | 3 DATABASE_URL-gated skips, build 14/14; journey.test.ts explicitly green (upload -> finalize -> retrieval -> audit end-to-end with synthetic data — the M2 exit criterion). Transit note: migration SQL arrived chat-mangled (smart primes/zero-width/identifier reflow); repaired at the integration station against schema.ts ground truth — all 9 drift guards green, PGlite executes the real SQL in every db test.
 
 in_flight:
-- M6 EXIT: golden journey #7 (missed task -> reminder -> fallback offer -> authorized-restriction-only-if-configured) + the 4-journey exit harness — dispatching. Then: lead dogfood + milestone close.
+- none — M6 CLOSED. M7-A wave (A44+A45 org model, A46 FHIR mapper, A47 SMART launch) packets staged for dispatch.
+
+merged_in_M6 (EXIT):
+- M6 EXIT (merge f6c5ee9 via branch m6-exit-journey7 b3fd221f): golden journey #7 — Today missed-task -> reminder (badge line, REMIND -> REMIND_WITH_FALLBACK_OFFER ladder mirrored) -> fallback offer as DATA (enforcementAuthority "none" type-encoded) -> authorization-status surface (AdherencePostureCard: observe-only default the loudest truth "No restrictions are configured — nothing happens when you miss a measurement."; SYNTH-configured policy variant behind explicit disclosure, bounded 2h, full B10 audit vocabulary); web lib reminders/adherence fixture worlds typed by REAL @orbb/notifications + @orbb/adherence shapes (import type only); /api/today/reminders + /api/today/adherence routes; mobile reminders/adherence models + Today journey-#7 leg + maestro journey7.yaml; journey7.spec.ts incl honest-failure leg (both chain routes aborted -> board unaffected) + two-visit persistence; m6-exit.spec.ts exit harness — collision-free checkpoints of journeys #1/#2/#4/#7 + cross-cutting invariants (web journeys complete, mobile paths exist, zero PHI across 14 fixture files). web unit 306->373, mobile 93->120, e2e 9->17. Delivery survived a server-side flight death (87k chars streamed, turn len=0) — the sandbox HELD the work; TL continuation nudge (8-round capacity fight, Cancel-only) revived it to delivery. TL battery on merged tree: install/lint/typecheck/test/build all-0, e2e 17/17 (after clearing a corrupt .next cache the TL's own killed-mid-build battery had left — environmental, not code).
 
 merged_in_M6:
 - M6-A (PR #22, Lane B): B1 onboarding + B2 intent creation + B3 plan review — first-run journey (persona/metric-interest/source summary, resumable, accessible), guided intent composer with EvidencePack coverage badges, plan review with explainability audit trail + safety badges (approve-with-edits/reject through domain-transition mirror), mobile parity + maestro flows, Playwright golden journey #1 head + ESCALATE variant; web unit 123->217, e2e 6/6; byte-verified sandbox tarball (sha256 6922c71c); merged 55761c8 2026-09-12.
@@ -47,7 +50,8 @@ merged_in_M6:
 - M6-C B7/B9 (Lane B, merge 963bbb5 via branch m6-c-sharing-consent 6dcba48 — TL implementation): B7 the frozen reviewable-contract sharing UX (six-step composer with consequence lines, typed /api/shares stub, revoke-with-explicit-confirm + terminal honest revoked state, access-history audit, answer-only honest preview, deterministic SYNTH seed) + B9 consent settings (/settings/consent: source consents deny-by-default, notification-prefs mirroring the B8 profile shape, access defaults, never-silent audit) + mobile parity (sharing-screen, you-screen, 2 maestro flows). web 289->306 (37 files), mobile 89->93 (8 files), e2e 9/9 incl NEW golden journey #4. Console-flight losses recorded (pod recycle + dead-turn); TL delivery primary per W803 precedent; battery all-0 on merged tree af0e6f7.
 
 next_dispatch:
-- M6 EXIT (journey #7 + harness, then dogfood) -> M7 Clinical OS packets (A44-A49, B11-B14, C1).
+- M7-A wave: m7a-org-model (A44+A45, Lane A), m7a-fhir-mapper (A46, Lane A), m7a-smart-launch (A47, Lane C) — templates staged, base f6c5ee9.
+- Then M7-B (A48+A49 API, B11-B14 clinician UX) after M7-A merges; M7-C (C1 clinical E2E + PHI-redaction suite) after that.
 
 merged_in_M3:
 - M3-C (PR #13, Lane C): @orbb/auth — SessionService (opaque hashed tokens, atomic rotate), dependency-free WebAuthn (hand-written CBOR, ES256/Ed25519/RS256, none+packed attestation, signCount clone detection), email OTP (single-use/TTL/throttle), recovery codes (hashed, timingSafeEqual), Upstash REST rate-limit adapter (SHAPE-VERIFIED via fetch stub, fail-closed, parity-tested vs in-memory), AccountService seams; zero external runtime deps; 147 tests; lockfile +16/-3.
