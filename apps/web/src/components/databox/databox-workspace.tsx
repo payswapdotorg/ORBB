@@ -16,6 +16,7 @@ import {
 } from "@orbb/ui";
 import { EvidenceTable } from "./evidence-table";
 import { ConsentSection } from "./consent-section";
+import { SharingWorkspace } from "../sharing/sharing-workspace";
 import { buildDataboxEntries, DATABOX_ACCESS_EVENT_FIXTURES } from "@/lib/databox/fixtures";
 import {
   DATABOX_QUALITY_OPTIONS,
@@ -395,6 +396,8 @@ export function DataboxWorkspace() {
         }}
         openRequest={openRequest}
       />
+
+      <SharingWorkspace />
     </div>
   );
 }

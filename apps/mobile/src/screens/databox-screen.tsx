@@ -17,6 +17,7 @@ import {
 } from "../lib/databox/model";
 import { corpusObservationDetail, type ObservationDetailView } from "../lib/observations/model";
 import { ObservationDetailScreen } from "./observation-detail-screen";
+import { SharingScreen } from "./sharing-screen";
 
 /**
  * DataBox surface (M6-B B6, mobile): the real DataBox-tab content that
@@ -59,6 +60,7 @@ function cycleOption(options: readonly DataboxFilterOption[], current: string): 
 
 export function DataboxScreen() {
   const [filters, setFilters] = useState<DataboxFilters>(initialDataboxFilters());
+  const [showSharing, setShowSharing] = useState(false);
   const [view, setView] = useState<DataboxViewMode>("timeline");
   const [detail, setDetail] = useState<ObservationDetailView | null>(null);
 
@@ -80,6 +82,10 @@ export function DataboxScreen() {
   const timeline = toTimelineGroups(entries);
   const collections = buildCollections(entries);
 
+  if (showSharing) {
+    return <SharingScreen onBack={() => setShowSharing(false)} />;
+  }
+
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -93,6 +99,17 @@ export function DataboxScreen() {
         <Text style={styles.intro}>
           Your personal health evidence store — every entry keeps its provenance.
         </Text>
+
+        <Pressable
+          accessibilityLabel="Open sharing"
+          accessibilityRole="button"
+          onPress={() => setShowSharing(true)}
+          style={styles.sharingEntry}
+        >
+          <Text style={styles.sharingEntryLabel}>
+            Sharing — review contracts, revoke access, see the audit trail
+          </Text>
+        </Pressable>
 
         <TextInput
           accessibilityLabel="Search your DataBox"
@@ -305,6 +322,17 @@ function FilterButton({
 }
 
 const styles = StyleSheet.create({
+  sharingEntry: {
+    borderColor: color.borderSubtle,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    minHeight: touchTarget.minimum,
+    justifyContent: "center",
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    marginBottom: spacing[2],
+  },
+  sharingEntryLabel: { color: color.accent, fontSize: typography.size.sm },
   screen: {
     backgroundColor: color.canvas,
     flex: 1,

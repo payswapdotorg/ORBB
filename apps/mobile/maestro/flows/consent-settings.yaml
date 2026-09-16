@@ -1,0 +1,40 @@
+# M6-C consent-settings journey (Lane B): the You tab's consent-posture
+# surface — active-shares aggregation, deny-by-default source consents,
+# quiet hours with consequence lines, and the never-silent change
+# history.
+#
+# All asserted strings are SYNTH-marked or architectural labels; nothing
+# here is or resembles real PHI.
+appId: ${MAESTRO_APP_ID}
+name: ORBB consent settings journey (M6-C)
+tags:
+  - M6
+  - consent
+---
+- launchApp
+
+# First-run onboarding quick-pass (the databox.yaml pattern).
+- runFlow:
+    when:
+      visible: "Welcome to ORBB"
+    commands:
+      - tapOn: "Get started"
+      - tapOn: "Person"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Start using ORBB"
+
+- tapOn: "You"
+- assertVisible: "Active shares"
+- assertVisible: "Measurement sources"
+
+# Deny-by-default: device sources start OFF.
+- assertVisible: "Off — new sources start OFF; nothing records by default"
+
+# Quiet hours consequence line.
+- assertVisible: "Reminders inside the window are deferred to 07:00 — never dropped"
+
+# A toggle change records to the change history (never silent).
+- tapOn: "Toggle device measurement sources"
+- assertVisible: "Device sources: enabled"
