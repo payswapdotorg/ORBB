@@ -1,32 +1,28 @@
 /**
- * Shared discriminated-union result helpers for the notification engine.
+ * Shared discriminated-union result helpers for the notification engine
+ * (A27–A31 `@orbb/measurement` engine style, mirrored locally so the
+ * package surface stays self-contained).
  *
- * RECORDED DECISION (measurement/intents lane style, A27–A31/A36–A43):
- * expected domain rejections are TYPED RESULTS, never thrown exceptions —
- * callers must be able to branch on the exact reason a reminder path is
- * denied or a dispatch is recorded as undeliverable. Delivery failures
- * from channels are likewise DATA inside a successful result (fail-closed
- * recorded outcomes), never exceptions and never silent drops.
- *
- * `NotificationResult` is structurally identical to the measurement lane's
- * `EngineResult` and the intent lane's `IntentResult` (redeclared locally
- * for the same dependency-budget reason those lanes recorded; values
- * interoperate at the boundary).
+ * Recorded decision: expected domain rejections are TYPED RESULTS, never
+ * thrown exceptions — callers (worker dispatch loop, API routes, the Lane C
+ * E2E harness) must be able to branch on the exact reason a reminder path
+ * is denied or degraded (deny-by-default, architecture §7 spirit).
+ * Delivery-channel failures are also typed outcomes (`DeliveryResult`),
+ * never exceptions, so a failing provider can never crash the engine.
  *
  * Error payloads are PHID-safe by construction: they describe the violated
- * invariant (a `kind` plus structural context such as input indexes and
- * field names) and never echo received ids, values, or payloads.
+ * invariant (a `kind`) and never echo received ids, values, or payloads.
  */
-export type NotificationResult<T, E> =
+export type EngineResult<T, E> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: E };
 
-/** Builds a success {@link NotificationResult}. */
-export function ok<T>(value: T): NotificationResult<T, never> {
+/** Builds a success {@link EngineResult}. */
+export function ok<T>(value: T): EngineResult<T, never> {
   return { ok: true, value };
 }
 
-/** Builds a rejection {@link NotificationResult}. */
-export function err<E>(error: E): NotificationResult<never, E> {
+/** Builds a rejection {@link EngineResult}. */
+export function err<E>(error: E): EngineResult<never, E> {
   return { ok: false, error };
 }

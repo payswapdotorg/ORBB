@@ -1,370 +1,202 @@
 /**
- * Delivery channel abstraction (B8) — the provider-portability seam.
+ * B8 — Delivery channel abstraction (fail-closed).
  *
- * THE CONTRACT (the M4-C/M5-C seam pattern; provider portability through
- * interfaces, no provider SDKs):
- *   - `NotificationChannel` is a typed port with per-channel CAPABILITY
- *     FLAGS (`canRemind`, `canCarryFallbackOffer`). Rung requirements are
- *     engine-side: rung 1 needs `canRemind`; rung 2 (the fallback offer)
- *     needs `canRemind` + `canCarryFallbackOffer`. A channel that cannot
- *     satisfy a rung's requirements is SKIPPED WITH AN ACCOUNTED REASON —
- *     never a silent drop.
- *   - Delivery is FAIL-CLOSED: `send` returns a typed
- *     {@link ChannelSendResult}; an undeliverable delivery is a RECORDED
- *     outcome with a reason; a channel that THROWS is converted by the
- *     engine into a recorded `channel-transport-error` outcome. Never a
- *     silent drop, never a thrown crash into the engine, never an effect
- *     on the engine result shape.
- *   - Channels see ONLY the PHI-free payload plus the opaque
- *     `recipientRef` pseudonym (see `recipients.ts`) — never a person id.
+ * RECORDED DESIGN DECISIONS:
  *
- * DOUBLES (the only implementations in this packet — no network, no SDK):
- *   - `InMemoryChannel` — the test/impl default. Records every delivery
- *     and result; deterministic fault injection for fail-closed proofs.
- *   - `SyntheticWebPushChannel` / `SyntheticEmailChannel` — SEAM-ONLY
- *     SYNTH doubles that shape the provider contract (web-push
- *     subscription endpoints that can EXPIRE — the real 410-Gone
- *     semantics — and email address tokens) without any network call.
- *     Real VAPID/SMTP-SES adapters arrive behind the SAME interface in a
- *     later integration packet (handoff recorded in README.md).
+ * - `NotificationChannel` exposes TYPED send operations — one per ladder
+ *   rung (`sendReminder`, `sendFallbackOffer`) — so providers explicitly
+ *   implement (or explicitly decline, via capability flags) each payload
+ *   variant. This is the M4-C/M5-C adapter-seam pattern: provider
+ *   portability through interfaces, NO provider SDKs, no network in this
+ *   package. The seam-only `WebPushChannel` / `EmailChannel` SYNTH doubles
+ *   (see their modules) shape the real provider contracts.
+ *
+ * - FAIL-CLOSED delivery results: an undeliverable send is a RECORDED
+ *   outcome (`status: "undelivered"` with a typed reason from a closed
+ *   vocabulary) — never a silent drop, never a thrown crash into the
+ *   engine. The engine additionally converts any thrown channel exception
+ *   and any malformed channel return value into `channel-error` outcomes,
+ *   so a rogue provider cannot crash dispatch (see `ReminderEngine`).
+ *
+ * - Capability flags gate rung fan-out: a channel that does not declare
+ *   `supportsRemind` / `supportsFallbackOffer` for a rung is SKIPPED with
+ *   an accounted reason in the computed schedule (fail-closed accounting,
+ *   never silent). A missing/undefined flag is falsy — deny-by-default.
+ *
+ * - The ROUTING plane and the PAYLOAD plane are separate: the send request
+ *   carries the person id (the channel must address its own delivery
+ *   target — subscriptions/addresses are resolved INSIDE the provider
+ *   adapter, never inside the engine), while the payload itself stays
+ *   person-free and PHI-free (see `payloads.ts`).
  */
-import type { Clock } from "@orbb/testkit";
-import { sha256Hex } from "./canonical.js";
-import type { ReminderPayload } from "./payload.js";
-import type { ReminderId } from "./ids.js";
-import type { NotificationChannelId, ReminderRung } from "./vocabulary.js";
+import type { PersonId } from "@orbb/domain";
+import { NotificationEngineError } from "./errors.js";
+import type { ReminderId } from "./identity.js";
+import type { ReminderPayload, ReminderRung } from "./payloads.js";
 
-// ---------------------------------------------------------------------------
-// Capability flags + rung requirements.
-// ---------------------------------------------------------------------------
+/** Delivery channel kinds (provider families). */
+export const CHANNEL_KINDS = ["inapp", "push", "email"] as const;
 
-/** Per-channel capability flags (the vocabulary is frozen: two flags). */
-export interface ChannelCapabilities {
-  /** The channel can carry rung-1 `REMIND` nudges. */
-  readonly canRemind: boolean;
-  /** The channel can carry the rung-2 fallback-offer vocabulary payload. */
-  readonly canCarryFallbackOffer: boolean;
+export type ChannelKind = (typeof CHANNEL_KINDS)[number];
+
+/** Type guard: is `value` a canonical channel kind? */
+export function isChannelKind(value: unknown): value is ChannelKind {
+  return typeof value === "string" && (CHANNEL_KINDS as readonly string[]).includes(value);
 }
 
-/** Capability flag names (used in accounted skip reasons). */
-export type ChannelCapabilityName = keyof ChannelCapabilities;
-
-/** The capability requirements per ladder rung (frozen, engine-side). */
-export const RUNG_CAPABILITY_REQUIREMENTS: Readonly<
-  Record<ReminderRung, readonly ChannelCapabilityName[]>
-> = {
-  REMIND: ["canRemind"],
-  REMIND_WITH_FALLBACK_OFFER: ["canRemind", "canCarryFallbackOffer"],
-};
-
-// ---------------------------------------------------------------------------
-// Fail-closed delivery result model.
-// ---------------------------------------------------------------------------
-
 /**
- * Why a delivery was undeliverable. PHID-safe by construction: reason
- * KINDS only, never received values.
+ * Closed vocabulary of typed delivery-failure reasons (PHID-safe — no
+ * provider detail beyond the classified reason; providers must not place
+ * PHI in `detail`).
  */
-export type ChannelFailureReason =
-  /** The recipient directory has no recipient reference for the person. */
-  | { readonly kind: "unknown-recipient" }
-  /** The channel's endpoint directory has no endpoint for the recipient ref. */
-  | { readonly kind: "unknown-recipient-endpoint" }
-  /** The recipient's endpoint exists but is expired (e.g., web-push 410 Gone). */
-  | { readonly kind: "recipient-endpoint-expired" }
-  /** The channel is not currently registered/resolvable (dispatch-time). */
-  | { readonly kind: "channel-disabled" }
-  /** The channel rejected the payload as undeliverable (provider policy). */
-  | { readonly kind: "payload-rejected" }
-  /** The channel threw or its transport failed — converted, never crashed. */
-  | { readonly kind: "channel-transport-error" };
+export const DELIVERY_FAILURE_REASONS = [
+  "channel-error",
+  "provider-rejected",
+  "no-delivery-address",
+  "rate-limited",
+] as const;
 
-/** The fail-closed result of one send operation. */
-export type ChannelSendResult =
-  | {
-      readonly status: "sent";
-      readonly deliveredAt: Date;
-      /** Opaque SYNTH-marked provider receipt (present on success). */
-      readonly providerReceipt?: string;
-    }
-  | {
-      readonly status: "undeliverable";
-      readonly reason: ChannelFailureReason;
-    };
+export type DeliveryFailureReason = (typeof DELIVERY_FAILURE_REASONS)[number];
 
-// ---------------------------------------------------------------------------
-// The channel port + the channel-visible delivery request.
-// ---------------------------------------------------------------------------
+/** Type guard: is `value` a canonical delivery-failure reason? */
+export function isDeliveryFailureReason(value: unknown): value is DeliveryFailureReason {
+  return (
+    typeof value === "string" && (DELIVERY_FAILURE_REASONS as readonly string[]).includes(value)
+  );
+}
 
-/**
- * The channel-visible delivery request: the PHI-free payload plus the
- * opaque recipient pseudonym and reminder identity. Structurally incapable
- * of carrying a person id (no such field exists on this type).
- */
-export interface OutboundDelivery {
+/** Per-rung capability flags (deny-by-default when absent). */
+export interface ChannelCapabilityFlags {
+  /** Can the channel carry REMIND-rung payloads? */
+  readonly supportsRemind: boolean;
+  /** Can the channel carry REMIND_WITH_FALLBACK_OFFER payloads? */
+  readonly supportsFallbackOffer: boolean;
+}
+
+/** Routing-envelope + payload handed to a channel for one send. */
+export interface ChannelSendRequest {
   readonly reminderId: ReminderId;
-  readonly recipientRef: string;
-  readonly channel: NotificationChannelId;
+  /** Routing plane only — payloads themselves are person-free. */
+  readonly personId: PersonId;
   readonly payload: ReminderPayload;
 }
 
+/** A successful delivery. */
+export interface DeliveredResult {
+  readonly status: "delivered";
+  readonly deliveredAt: Date;
+  /** Opaque, PHID-safe provider receipt token (SYNTH-marked in doubles). */
+  readonly providerReceipt?: string;
+}
+
+/** A recorded, classified delivery failure — never a silent drop. */
+export interface UndeliveredResult {
+  readonly status: "undelivered";
+  readonly reason: DeliveryFailureReason;
+  /** Optional human-safe context string (must never carry PHI). */
+  readonly detail?: string;
+}
+
+/** Fail-closed delivery outcome: delivered, or undelivered WITH a reason. */
+export type DeliveryResult = DeliveredResult | UndeliveredResult;
+
+function isTimestamp(value: unknown): value is Date {
+  return value instanceof Date && !Number.isNaN(value.getTime());
+}
+
+/** Type guard: is `value` a well-formed {@link DeliveryResult}? */
+export function isDeliveryResult(value: unknown): value is DeliveryResult {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Partial<DeliveryResult>;
+  if (candidate.status === "delivered") {
+    if (!isTimestamp(candidate.deliveredAt)) {
+      return false;
+    }
+    return candidate.providerReceipt === undefined || typeof candidate.providerReceipt === "string";
+  }
+  if (candidate.status === "undelivered") {
+    if (!isDeliveryFailureReason(candidate.reason)) {
+      return false;
+    }
+    return candidate.detail === undefined || typeof candidate.detail === "string";
+  }
+  return false;
+}
+
 /**
- * The delivery channel port. Implementations MUST be fail-closed: return
- * typed results, record reasons, and reserve throwing for programming
- * errors (the engine converts any throw into a recorded
- * `channel-transport-error` outcome — the engine itself never crashes on
- * a channel).
+ * The delivery-channel port. Implementations MUST NOT throw for expected
+ * delivery failures — they return `undelivered` results (the engine still
+ * defends against throws). Implementations resolve their own delivery
+ * addresses; they never receive them from the engine.
  */
 export interface NotificationChannel {
-  /** Lane-local channel identifier (registry key). */
-  readonly id: NotificationChannelId;
-  /** This channel's capability flags. */
-  readonly capabilities: ChannelCapabilities;
-  /** Sends one delivery; resolves with the fail-closed result. */
-  send(delivery: OutboundDelivery): Promise<ChannelSendResult>;
-}
-
-// ---------------------------------------------------------------------------
-// Channel registry.
-// ---------------------------------------------------------------------------
-
-/** Resolves channel implementations by id (the injected channel set). */
-export interface ChannelRegistry {
-  resolve(channelId: NotificationChannelId): NotificationChannel | undefined;
-  list(): readonly NotificationChannel[];
+  /** Stable channel identifier (referenced by preferences). */
+  readonly id: string;
+  readonly kind: ChannelKind;
+  readonly capabilities: ChannelCapabilityFlags;
+  /** Typed send operation for the REMIND rung. */
+  sendReminder(request: ChannelSendRequest): Promise<DeliveryResult>;
+  /** Typed send operation for the REMIND_WITH_FALLBACK_OFFER rung. */
+  sendFallbackOffer(request: ChannelSendRequest): Promise<DeliveryResult>;
 }
 
 /**
- * In-memory {@link ChannelRegistry} (the test/impl double). Registration
- * order defines `list()` order; duplicate ids are a construction-time
- * programming error (`NotificationEngineError` — invalid-request).
+ * The channel registry input: the set of channels available to a dispatch.
+ * `InMemoryChannelRegistry` is the reference double; production wiring
+ * (OS push services, email provider) registers real adapters here.
  */
-export class InMemoryChannelRegistry implements ChannelRegistry {
-  readonly #channels = new Map<NotificationChannelId, NotificationChannel>();
+export interface ChannelRegistry {
+  all(): readonly NotificationChannel[];
+  get(channelId: string): NotificationChannel | undefined;
+}
 
-  constructor(channels: readonly NotificationChannel[] = []) {
+/** In-memory reference {@link ChannelRegistry} (insertion-ordered). */
+export class InMemoryChannelRegistry implements ChannelRegistry {
+  readonly #channels: readonly NotificationChannel[];
+  readonly #byId: Map<string, NotificationChannel> = new Map();
+
+  constructor(channels: readonly NotificationChannel[]) {
     for (const channel of channels) {
-      if (this.#channels.has(channel.id)) {
-        throw new Error(
-          "InMemoryChannelRegistry: duplicate channel id at construction (programming error).",
+      if (
+        typeof channel !== "object" ||
+        channel === null ||
+        typeof channel.id !== "string" ||
+        channel.id.length === 0
+      ) {
+        throw new NotificationEngineError(
+          "invalid-request",
+          "Channel registry entries must carry a non-empty string id.",
         );
       }
-      this.#channels.set(channel.id, channel);
+      if (this.#byId.has(channel.id)) {
+        throw new NotificationEngineError(
+          "invariant-violation",
+          "Channel registry contains a duplicate channel id.",
+        );
+      }
+      this.#byId.set(channel.id, channel);
     }
+    this.#channels = [...channels];
   }
 
-  resolve(channelId: NotificationChannelId): NotificationChannel | undefined {
-    return this.#channels.get(channelId);
+  all(): readonly NotificationChannel[] {
+    return this.#channels;
   }
 
-  list(): readonly NotificationChannel[] {
-    return [...this.#channels.values()];
-  }
-}
-
-// ---------------------------------------------------------------------------
-// InMemoryChannel — the test/impl default double.
-// ---------------------------------------------------------------------------
-
-/** Deterministic fault injection for fail-closed proofs. */
-export type ChannelFaultInjection =
-  | { readonly mode: "none" }
-  | { readonly mode: "throw" }
-  | { readonly mode: "undeliverable"; readonly reason: ChannelFailureReason };
-
-/** Constructor deps for {@link InMemoryChannel} (all injectable). */
-export interface InMemoryChannelDeps {
-  readonly id: NotificationChannelId;
-  readonly clock: Clock;
-  /** Defaults to full capabilities ({@link FULL_CHANNEL_CAPABILITIES}). */
-  readonly capabilities?: ChannelCapabilities;
-  /** Defaults to `{ mode: "none" }` (always succeed). */
-  readonly fault?: ChannelFaultInjection;
-}
-
-/** Full capability flags: both rungs deliverable. */
-export const FULL_CHANNEL_CAPABILITIES: ChannelCapabilities = {
-  canRemind: true,
-  canCarryFallbackOffer: true,
-};
-
-/** One recorded delivery attempt the double observed (for assertions). */
-export interface RecordedChannelDelivery {
-  readonly delivery: OutboundDelivery;
-  readonly result: ChannelSendResult;
-  readonly receivedAt: Date;
-}
-
-/**
- * The in-memory channel double: records every delivery and its result in
- * order, with deterministic fault injection. Pure over (deliveries,
- * injected clock state) — no I/O, no network, nothing dropped silently.
- */
-export class InMemoryChannel implements NotificationChannel {
-  readonly id: NotificationChannelId;
-  readonly capabilities: ChannelCapabilities;
-  readonly #clock: Clock;
-  readonly #fault: ChannelFaultInjection;
-  readonly #recorded: RecordedChannelDelivery[] = [];
-
-  constructor(deps: InMemoryChannelDeps) {
-    this.id = deps.id;
-    this.capabilities = deps.capabilities ?? FULL_CHANNEL_CAPABILITIES;
-    this.#clock = deps.clock;
-    this.#fault = deps.fault ?? { mode: "none" };
-  }
-
-  /** Every delivery observed so far, in order (defensive copies). */
-  get recorded(): readonly RecordedChannelDelivery[] {
-    return this.#recorded.map((entry) => ({
-      delivery: entry.delivery,
-      result: entry.result,
-      receivedAt: new Date(entry.receivedAt.getTime()),
-    }));
-  }
-
-  async send(delivery: OutboundDelivery): Promise<ChannelSendResult> {
-    const receivedAt = this.#clock.now();
-    const result = this.#deliver(delivery, receivedAt);
-    this.#recorded.push({ delivery, result, receivedAt });
-    return result;
-  }
-
-  #deliver(delivery: OutboundDelivery, now: Date): ChannelSendResult {
-    switch (this.#fault.mode) {
-      case "none":
-        return {
-          status: "sent",
-          deliveredAt: now,
-          providerReceipt: synthReceipt("SYNTH-inmem-provider-v1", delivery),
-        };
-      case "throw":
-        // The engine converts this into a recorded channel-transport-error.
-        throw new Error("SYNTH in-memory channel transport failure (fault injection)");
-      case "undeliverable":
-        return { status: "undeliverable", reason: this.#fault.reason };
-    }
+  get(channelId: string): NotificationChannel | undefined {
+    return this.#byId.get(channelId);
   }
 }
 
-// ---------------------------------------------------------------------------
-// SYNTH provider doubles (seam-only — they shape the provider contract).
-// ---------------------------------------------------------------------------
-
-/**
- * The recipient-endpoint directory seam the SYNTH provider doubles
- * consume: resolves an opaque recipient ref to that channel's endpoint
- * token, with REAL provider lifecycle semantics (endpoints expire —
- * web-push subscriptions return 410 Gone and must be re-subscribed).
- */
-export interface RecipientEndpointDirectory {
-  resolve(recipientRef: string): RecipientEndpoint | undefined;
-}
-
-/** One channel endpoint: an opaque token plus its lifecycle status. */
-export interface RecipientEndpoint {
-  /** Opaque endpoint token (SYNTH-marked in tests; a real push subscription / address pseudonym in production). */
-  readonly token: string;
-  /** `expired` endpoints are undeliverable (`recipient-endpoint-expired`). */
-  readonly status: "active" | "expired";
-}
-
-/**
- * In-memory {@link RecipientEndpointDirectory} (the test double for the
- * provider-side address book).
- */
-export class InMemoryRecipientEndpointDirectory implements RecipientEndpointDirectory {
-  readonly #endpoints = new Map<string, RecipientEndpoint>();
-
-  /** Registers (or replaces) the endpoint for a recipient ref. */
-  register(recipientRef: string, endpoint: RecipientEndpoint): void {
-    this.#endpoints.set(recipientRef, endpoint);
-  }
-
-  resolve(recipientRef: string): RecipientEndpoint | undefined {
-    return this.#endpoints.get(recipientRef);
-  }
-}
-
-/** Constructor deps for the SYNTH provider doubles (all injectable). */
-export interface SyntheticProviderChannelDeps {
-  readonly clock: Clock;
-  /** The provider-side endpoint directory (recipient ref -> endpoint). */
-  readonly endpoints: RecipientEndpointDirectory;
-}
-
-/**
- * SYNTH web-push provider double (`SYNTH-webpush-provider-v1`): resolves
- * the recipient's push endpoint through the injected directory and issues
- * a deterministic SYNTH receipt. Full capabilities (web push carries rich
- * payloads). NO network, NO SDK, NO VAPID — the real adapter arrives
- * behind the same `NotificationChannel` interface.
- */
-export class SyntheticWebPushChannel implements NotificationChannel {
-  readonly id: NotificationChannelId = "webpush-synth";
-  readonly capabilities: ChannelCapabilities = FULL_CHANNEL_CAPABILITIES;
-  readonly #clock: Clock;
-  readonly #endpoints: RecipientEndpointDirectory;
-
-  constructor(deps: SyntheticProviderChannelDeps) {
-    this.#clock = deps.clock;
-    this.#endpoints = deps.endpoints;
-  }
-
-  async send(delivery: OutboundDelivery): Promise<ChannelSendResult> {
-    const endpoint = this.#endpoints.resolve(delivery.recipientRef);
-    if (endpoint === undefined) {
-      return { status: "undeliverable", reason: { kind: "unknown-recipient-endpoint" } };
-    }
-    if (endpoint.status === "expired") {
-      return { status: "undeliverable", reason: { kind: "recipient-endpoint-expired" } };
-    }
-    return {
-      status: "sent",
-      deliveredAt: this.#clock.now(),
-      providerReceipt: synthReceipt("SYNTH-webpush-provider-v1", delivery),
-    };
-  }
-}
-
-/**
- * SYNTH email provider double (`SYNTH-email-provider-v1`): the same
- * fail-closed contract through the email-address-token seam. Full
- * capabilities (email carries rich payloads). NO network, NO SMTP/SES.
- */
-export class SyntheticEmailChannel implements NotificationChannel {
-  readonly id: NotificationChannelId = "email-synth";
-  readonly capabilities: ChannelCapabilities = FULL_CHANNEL_CAPABILITIES;
-  readonly #clock: Clock;
-  readonly #endpoints: RecipientEndpointDirectory;
-
-  constructor(deps: SyntheticProviderChannelDeps) {
-    this.#clock = deps.clock;
-    this.#endpoints = deps.endpoints;
-  }
-
-  async send(delivery: OutboundDelivery): Promise<ChannelSendResult> {
-    const endpoint = this.#endpoints.resolve(delivery.recipientRef);
-    if (endpoint === undefined) {
-      return { status: "undeliverable", reason: { kind: "unknown-recipient-endpoint" } };
-    }
-    if (endpoint.status === "expired") {
-      return { status: "undeliverable", reason: { kind: "recipient-endpoint-expired" } };
-    }
-    return {
-      status: "sent",
-      deliveredAt: this.#clock.now(),
-      providerReceipt: synthReceipt("SYNTH-email-provider-v1", delivery),
-    };
-  }
-}
-
-/**
- * Deterministic SYNTH provider receipt: a fixed provider marker plus a
- * stable hash over (provider id, reminder id, recipient ref). Same
- * delivery => same receipt, always (determinism proofs over channel
- * records). The receipt embeds NO payload content — only identity hashes.
- */
-function synthReceipt(providerId: string, delivery: OutboundDelivery): string {
-  return `${providerId}-${sha256Hex(`${providerId}|${delivery.reminderId}|${delivery.recipientRef}`).slice(0, 16)}`;
+/** Dispatches a send to the typed operation for a rung (pure helper). */
+export function sendForRung(
+  channel: NotificationChannel,
+  rung: ReminderRung,
+  request: ChannelSendRequest,
+): Promise<DeliveryResult> {
+  return rung === "REMIND_WITH_FALLBACK_OFFER"
+    ? channel.sendFallbackOffer(request)
+    : channel.sendReminder(request);
 }

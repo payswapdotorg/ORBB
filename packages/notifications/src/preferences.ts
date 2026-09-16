@@ -1,152 +1,137 @@
 /**
- * Reminder preference profile (B8) — the user-gated input of the engine.
+ * B8 — Reminder preference profile (the "user preference profile" input of
+ * the notification engine).
  *
- * The profile is the single place user preference is expressed: the master
- * reminders gate, the ordered set of enabled channels, the quiet-hours
- * spec (gated, with the recorded 22:00–07:00 default when absent), and
- * the two schedule knobs (upcoming-due lead time, missed-window escalation
- * grace). All knobs are NON-NEGATIVE millisecond durations.
+ * RECORDED DESIGN DECISIONS / ASSUMPTIONS:
  *
- * RECORDED DEFAULT ASSUMPTIONS (both genuinely unspecified by the packet;
- * the safest architecture-consistent values are fixed and testable):
- *   - `leadTimeMs`      default 3_600_000 (60 minutes before the window
- *     closes — an "upcoming due" nudge close enough to be actionable,
- *     far enough to be gentle).
- *   - `escalationGraceMs` default 3_600_000 (60 minutes of grace after a
- *     window closes before the fallback-offer rung may fire — the ladder
- *     escalates gently, never at the instant of the miss).
- * Both are profile-overridable; production surfaces should expose them as
- * accessibility/preference controls (Lane B integration).
+ * - Quiet hours are PREFERENCE-GATED with a default: when no narrower
+ *   preference has been recorded, the engine assumes no reminders are sent
+ *   between 22:00 and 07:00 in the person's LOCAL-OF-RECORD time. Reminders
+ *   whose nominal send instant falls inside quiet hours are DEFERRED to the
+ *   closing edge (07:00) — never dropped silently (see `quiet-hours.ts`).
+ *
+ * - "Local-of-record" is modeled as a FIXED UTC offset in minutes
+ *   ([-720, +840], i.e. UTC-12:00 .. UTC+14:00). Recorded assumption:
+ *   DST-aware IANA zones are a deployment/presentation concern; the engine
+ *   itself stays pure UTC millisecond arithmetic (the `@orbb/measurement`
+ *   scheduler precedent — DST-free by construction).
+ *
+ * - `remindersEnabled: false` is the master gate: no reminders at all (the
+ *   gentle, non-punishing stance — reminders nudge, they never punish,
+ *   never gamify). Per-channel entries override; channels NOT listed in
+ *   `channelPreferences` default to ENABLED (the deployment wires only
+ *   channels the person actually has; opt-out is per-channel).
+ *
+ * - `leadMinutes` (how long before the window's due instant the upcoming
+ *   REMIND rung fires) defaults to 60; `escalationDelayMinutes` (how long
+ *   after a missed window before the escalation rung fires) defaults to 30.
+ *   Both are per-person preferences with engine-side bounds (0 .. 30 days).
  */
-import { NotificationEngineError } from "./errors.js";
-import { DEFAULT_QUIET_HOURS, isQuietHoursSpec, type QuietHoursSpec } from "./quietHours.js";
-import { isNotificationChannelId, type NotificationChannelId } from "./vocabulary.js";
+import type { PersonId } from "@orbb/domain";
 
-/** Default upcoming-due lead time: 60 minutes before the window closes. */
-export const DEFAULT_LEAD_TIME_MS = 3_600_000;
+/** Default quiet-hours start (local minutes-of-day): 22:00. */
+export const DEFAULT_QUIET_HOURS_START_LOCAL_MINUTES = 22 * 60;
 
-/** Default missed-window escalation grace: 60 minutes after the window closes. */
-export const DEFAULT_ESCALATION_GRACE_MS = 3_600_000;
+/** Default quiet-hours end (local minutes-of-day): 07:00. */
+export const DEFAULT_QUIET_HOURS_END_LOCAL_MINUTES = 7 * 60;
+
+/** Default upcoming-due reminder lead, in minutes (recorded assumption). */
+export const DEFAULT_REMINDER_LEAD_MINUTES = 60;
+
+/** Default missed-window escalation delay, in minutes (recorded assumption). */
+export const DEFAULT_ESCALATION_DELAY_MINUTES = 30;
+
+/** Minimum local UTC offset accepted for local-of-record: UTC-12:00. */
+export const MIN_LOCAL_UTC_OFFSET_MINUTES = -720;
+
+/** Maximum local UTC offset accepted for local-of-record: UTC+14:00. */
+export const MAX_LOCAL_UTC_OFFSET_MINUTES = 840;
+
+/** Upper bound for per-person lead/escalation preferences: 30 days. */
+export const MAX_TIMING_PREFERENCE_MINUTES = 43_200;
+
+/** Minutes in one local day. */
+export const MINUTES_PER_DAY = 1_440;
 
 /**
- * The user preference profile. Field-by-field validation semantics:
- *   - `remindersEnabled: false` — the master gate: the engine computes an
- *     EMPTY schedule (preference wins; no reminder is ever forced).
- *   - `channels` — ordered, non-empty when reminders are enabled; each id
- *     must satisfy the lane-local channel grammar (registry membership is
- *     checked by the engine against its injected registry).
- *   - `quietHours` — absent => the recorded DEFAULT (22:00–07:00 offset 0);
- *     `null` or `{ enabled: false }` => deferral disabled.
- *   - `leadTimeMs` / `escalationGraceMs` — absent => the recorded defaults;
- *     when present, non-negative finite integers.
+ * Quiet-hours specification in local-of-record minutes-of-day. The window
+ * is half-open `[startLocalMinutes, endLocalMinutes)`; a start later than
+ * the end wraps midnight (e.g. 22:00 → 07:00). A degenerate zero-length
+ * window (start === end) is treated as disabled.
  */
-export interface ReminderPreferenceProfile {
-  /** Master preference gate. */
-  readonly remindersEnabled: boolean;
-  /** Ordered enabled delivery channels (fan-out order). */
-  readonly channels: readonly NotificationChannelId[];
-  /** Quiet hours: absent => default 22:00–07:00; null / disabled => off. */
-  readonly quietHours?: QuietHoursSpec | null;
-  /** Upcoming-due lead time (ms). Default 3_600_000. */
-  readonly leadTimeMs?: number;
-  /** Missed-window escalation grace (ms). Default 3_600_000. */
-  readonly escalationGraceMs?: number;
+export interface QuietHoursSpec {
+  readonly enabled: boolean;
+  readonly startLocalMinutes: number;
+  readonly endLocalMinutes: number;
 }
 
-/** Validated, default-resolved internal view of a preference profile. */
-export interface NormalizedReminderProfile {
-  readonly remindersEnabled: boolean;
-  readonly channels: readonly NotificationChannelId[];
-  /** `null` when quiet-hour deferral is disabled. */
-  readonly quietHours: QuietHoursSpec | null;
-  readonly leadTimeMs: number;
-  readonly escalationGraceMs: number;
-}
-
-/** Structural field names a preference rejection can point at (PHID-safe). */
-export type PreferenceField =
-  | "remindersEnabled"
-  | "channels"
-  | "quietHours"
-  | "leadTimeMs"
-  | "escalationGraceMs";
-
-/** Is `value` structurally a valid {@link ReminderPreferenceProfile}? */
-export function isReminderPreferenceProfile(value: unknown): value is ReminderPreferenceProfile {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  const profile = value as Record<string, unknown>;
-  if (typeof profile.remindersEnabled !== "boolean") {
-    return false;
-  }
-  if (!Array.isArray(profile.channels)) {
-    return false;
-  }
-  for (const channel of profile.channels) {
-    if (!isNotificationChannelId(channel)) {
-      return false;
-    }
-  }
-  if (profile.remindersEnabled && profile.channels.length === 0) {
-    return false;
-  }
-  const quietHours: unknown = profile.quietHours;
-  if (quietHours !== undefined && quietHours !== null && !isQuietHoursSpec(quietHours)) {
-    return false;
-  }
-  if (!isOptionalDuration(profile.leadTimeMs) || !isOptionalDuration(profile.escalationGraceMs)) {
-    return false;
-  }
-  return true;
-}
-
-function isOptionalDuration(value: unknown): boolean {
-  return (
-    value === undefined ||
-    (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER)
-  );
+/** One per-channel reminder preference override. */
+export interface ChannelPreference {
+  readonly channelId: string;
+  readonly enabled: boolean;
 }
 
 /**
- * Resolves a {@link ReminderPreferenceProfile} into its normalized view,
- * applying the recorded defaults. Throws {@link NotificationEngineError}
- * (`invalid-request`) on structurally invalid input — callers should
- * pre-validate with {@link isReminderPreferenceProfile} and surface the
- * typed rejection instead.
+ * The per-person reminder preference profile consumed by
+ * `ReminderEngine.computeSchedule` / `dispatchDue`.
  */
-export function normalizeReminderProfile(
-  profile: ReminderPreferenceProfile,
-): NormalizedReminderProfile {
-  if (!isReminderPreferenceProfile(profile)) {
-    throw new NotificationEngineError(
-      "invalid-request",
-      "Reminder preference profile failed structural validation (engine surfaces typed rejections before calling this).",
-    );
-  }
-  const quietHours: QuietHoursSpec | null =
-    profile.quietHours === undefined
-      ? DEFAULT_QUIET_HOURS
-      : profile.quietHours === null
-        ? null
-        : profile.quietHours.enabled
-          ? profile.quietHours
-          : null;
+export interface ReminderPreferences {
+  readonly personId: PersonId;
+  /** Master gate — `false` disables every reminder for the person. */
+  readonly remindersEnabled: boolean;
+  /** Quiet hours window (preference-gated; default 22:00–07:00). */
+  readonly quietHours: QuietHoursSpec;
+  /** Local-of-record as a fixed UTC offset in minutes ([-720, +840]). */
+  readonly localUtcOffsetMinutes: number;
+  /** Lead before the window due instant for the REMIND rung. Default 60. */
+  readonly leadMinutes: number;
+  /** Delay after a missed window before the escalation rung. Default 30. */
+  readonly escalationDelayMinutes: number;
+  /** Per-channel overrides; unlisted channels default to enabled. */
+  readonly channelPreferences: readonly ChannelPreference[];
+}
+
+/** The recorded default quiet-hours window: 22:00–07:00, enabled. */
+export function defaultQuietHours(): QuietHoursSpec {
   return {
-    remindersEnabled: profile.remindersEnabled,
-    channels: profile.channels,
-    quietHours,
-    leadTimeMs: profile.leadTimeMs ?? DEFAULT_LEAD_TIME_MS,
-    escalationGraceMs: profile.escalationGraceMs ?? DEFAULT_ESCALATION_GRACE_MS,
+    enabled: true,
+    startLocalMinutes: DEFAULT_QUIET_HOURS_START_LOCAL_MINUTES,
+    endLocalMinutes: DEFAULT_QUIET_HOURS_END_LOCAL_MINUTES,
   };
 }
 
 /**
- * A ready-to-use default profile: reminders on, the default in-memory
- * channel, and the recorded default quiet hours + knobs (all fields the
- * engine resolves via their documented defaults).
+ * Builds the default preference profile for a person: reminders enabled,
+ * quiet hours 22:00–07:00 local-of-record at UTC+0, lead 60 min,
+ * escalation delay 30 min, no per-channel overrides.
  */
-export const DEFAULT_REMINDER_PROFILE: ReminderPreferenceProfile = {
-  remindersEnabled: true,
-  channels: ["inmem"],
-};
+export function defaultReminderPreferences(personId: PersonId): ReminderPreferences {
+  return {
+    personId,
+    remindersEnabled: true,
+    quietHours: defaultQuietHours(),
+    localUtcOffsetMinutes: 0,
+    leadMinutes: DEFAULT_REMINDER_LEAD_MINUTES,
+    escalationDelayMinutes: DEFAULT_ESCALATION_DELAY_MINUTES,
+    channelPreferences: [],
+  };
+}
+
+/** Type guard: is `value` a structurally valid {@link QuietHoursSpec}? */
+export function isQuietHoursSpec(value: unknown): value is QuietHoursSpec {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Partial<QuietHoursSpec>;
+  return (
+    typeof candidate.enabled === "boolean" &&
+    typeof candidate.startLocalMinutes === "number" &&
+    Number.isInteger(candidate.startLocalMinutes) &&
+    candidate.startLocalMinutes >= 0 &&
+    candidate.startLocalMinutes < MINUTES_PER_DAY &&
+    typeof candidate.endLocalMinutes === "number" &&
+    Number.isInteger(candidate.endLocalMinutes) &&
+    candidate.endLocalMinutes >= 0 &&
+    candidate.endLocalMinutes < MINUTES_PER_DAY
+  );
+}

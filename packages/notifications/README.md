@@ -1,76 +1,159 @@
 # @orbb/notifications
 
-The deterministic reminder/notification engine for ORBB — Milestone 6, work item **B8** (Lane A: Domain/API/Data). Pure package, fully tested, zero runtime dependencies.
+Deterministic notification/reminder engine for ORBB — **Milestone 6, Lane A,
+work item B8**. Pure package, fully tested: injected clock, injected
+id-factory, injected send-attempt ledger, injected event sink, injected
+channel registry. **Zero `@orbb/db` imports, zero external runtime
+dependencies, no provider SDKs** (the `@orbb/measurement` A30/A31
+interface-driven discipline).
+
+Workspace dependencies: `@orbb/domain` (canonical id guards/types),
+`@orbb/measurement` (the REAL `MeasurementTask`/`MeasurementWindow` types +
+the shared deterministic-id derivation), `@orbb/contracts` (the §11
+`DomainEventEnvelope` used for `TASK_DUE` emission). `@orbb/testkit`
+(Clock/IdFactory) is a dev-only seam.
 
 ## Package contract
 
-`ReminderEngine` exposes two operations over one deterministic core:
+### 1. Reminder computation — `ReminderEngine.computeSchedule(input)`
 
-| Operation | Purity | Purpose |
-| --- | --- | --- |
-| `computeSchedule({ tasks, profile })` | Pure, synchronous | Expands measurement-task snapshots + a preference profile into the reminder schedule (ids, payloads, fire instants, channel fan-out, accounted skips). Same inputs ⇒ byte-identical schedule. |
-| `dispatchPending({ tasks, profile })` | Idempotent, fail-closed | Recomputes the schedule from the current clock, filters to due reminders, suppresses ledgered ones (exactly-once per reminder identity), resolves recipient pseudonyms, delivers through channels, records every outcome. |
+Pure, deterministic projection of (measurement-task snapshots, preference
+profile, channel registry, vocabulary labels, clock-now) onto a
+`ReminderSchedule`:
 
-Inputs:
+- **Upcoming-due rung `REMIND`** — an OPEN task whose window's due instant
+  (`window.endsAt`, half-open `[startsAt, endsAt)`) is strictly in the
+  future gets one reminder per eligible channel, nominally sent
+  `leadMinutes` (default 60) before the due instant. A computation inside
+  the lead window yields an immediately dispatchable (late) reminder.
+- **Missed-window detection + gentle escalation ladder**
+  `REMIND → REMIND_WITH_FALLBACK_OFFER` — an OPEN task whose window has
+  closed (`now ≥ window.endsAt`) has missed it; the rung advances exactly
+  on the recorded conditions — (a) the window closed, (b) the task is
+  still open — and the escalation fires `escalationDelayMinutes`
+  (default 30) after the window edge.
+- Completed tasks produce nothing — reminders nudge, they never punish
+  and never gamify (AGENTS.md operating rules).
 
-- **Task snapshots** — the REAL `MeasurementTask` / `MeasurementWindow` types, imported types-only from `@orbb/measurement` (the workspace dependency; see the dependency-budget note below).
-- **A user preference profile** (`ReminderPreferenceProfile`) — master reminders gate, ordered enabled channels, quiet-hours spec, lead/grace knobs.
-- **A channel registry** (`ChannelRegistry`) — the injected set of delivery adapters with capability flags.
+The schedule also records every **accounted skip** (a channel disabled by
+preference, or lacking the rung's capability flag) with a typed reason —
+never a silent drop.
 
-Everything else is injected per the `@orbb/measurement` discipline: **clock, id-factory, ledger, recipient directory, label directory** — zero db imports, zero external runtime dependencies (`node:crypto` builtin only).
+### 2. Quiet hours (preference-gated, defer — never drop)
 
-### The escalation ladder (journey #7)
+**Recorded assumption (default):** no reminders are sent **22:00–07:00
+local-of-record** when no narrower preference exists. A nominal send
+instant inside quiet hours is **deferred forward to the closing edge (the
+next 07:00 local)** — never dropped silently, and reminder identity is
+derived from the *nominal* instant so deferral never changes identity.
+"Local-of-record" is a **fixed UTC offset** in minutes ([-720, +840]):
+pure UTC millisecond arithmetic, DST-free by construction (the A30
+scheduler precedent). DST-aware IANA zones are a deployment/presentation
+concern (handoff recorded). A degenerate zero-length quiet window is
+treated as disabled.
 
-```
-REMIND  ──(open task, window.endsAt <= now, after the grace delay)──▶  REMIND_WITH_FALLBACK_OFFER
-```
+### 3. Idempotency
 
-- `REMIND` — the upcoming-due nudge for an OPEN task with a future window: fires `leadTimeMs` (default 60 min) before the window closes, clamped forward to the window start (a nudge never fires before the window opens).
-- `REMIND_WITH_FALLBACK_OFFER` — the missed-window rung: fires `escalationGraceMs` (default 60 min) after the window closes. The payload carries the task's recorded method vocabulary (`methodOrder`, preferred first) as **DATA** — the engine never orders a provider; the person chooses. `enforcementAuthority: "none"` is type-encoded on the offer.
-- COMPLETED tasks get no reminders — completing silences the ladder. Reminders nudge; they never assert clinical conclusions, never punish, never gamify.
+Reminder identity is a deterministic function of
+**(task id, window id [the window's `sequence`], rung, channel, UTC day of
+the nominal send instant)**, derived with the shared domain-separated
+SHA-256 helper (`rem_<43-char base64url>`). Recomputing the schedule over
+unchanged inputs yields **byte-identical** reminders (see
+`serializeReminderSchedule` canonical JSON). The **send-attempt ledger**
+(`ReminderDispatchLedger` port, in-memory double included) keys dispatch
+records by reminder id: a delivered reminder is dispatched **exactly
+once, ever**; a failed attempt is recorded with its classified reason and
+stays retryable until `maxDispatchAttempts` (default 3 — recorded
+assumption), after which the reminder is skipped with
+`retries-exhausted` (fail-closed, recorded).
 
-The tail of golden journey #7 — *"authorized restriction applied only if configured"* — is **B10's** adherence-enforcement abstraction, deliberately out of scope: this package exports no enforcement mechanism of any kind.
+### 4. Delivery channels (fail-closed)
 
-### Quiet hours (recorded assumption)
+`NotificationChannel` exposes **typed send operations** (`sendReminder`,
+`sendFallbackOffer` — one per ladder rung) plus per-rung capability flags
+(`supportsRemind`, `supportsFallbackOffer`; absent flags are falsy —
+deny-by-default). Delivery results are a **fail-closed union**:
+`delivered | undelivered + typed reason` from the closed vocabulary
+`channel-error | provider-rejected | no-delivery-address | rate-limited`.
+The engine additionally converts channel **throws** and malformed channel
+returns into recorded `channel-error` failures — a rogue provider can
+never crash dispatch and an undeliverable reminder is never silently
+dropped.
 
-- Default: **no reminders 22:00–07:00 local-of-record**, applied when a profile is silent about quiet hours; `quietHours: null` (or `enabled: false`) disables deferral — quiet hours are preference-gated, never forced.
-- **Local-of-record is a fixed UTC offset in minutes** (pure-UTC, DST-free — the same discipline as the A30 scheduler's window math). Resolving a person's IANA timezone (with DST transitions) is an application-boundary concern feeding the profile's offset.
-- Reminders due inside the quiet interval are **deferred to the quiet-window end edge (07:00), never dropped silently** — the deferral is recorded on the payload (`defer.from` + `reason: "quiet-hours"`) and the half-open `[start, end)` interval semantics are table-tested across UTC-day edges, week boundaries, and offset extremes.
+Doubles shipped:
 
-### Idempotency and reminder identity
+- `InMemoryChannel` — the test/implementation default (programmable
+  failure modes, defensive copies, injected clock).
+- `WebPushChannel` / `EmailChannel` — **seam-only SYNTH doubles** (the
+  M4-C/M5-C pattern): they shape the provider contracts
+  (`WebPushSubscriptionProvider`, `EmailAddressProvider` ports) without
+  any network call or SDK. Addresses/tokens are resolved INSIDE the
+  provider adapter by person id — the engine never sees them.
 
-Reminder identity is a deterministic function of **(task id, window id, rung, channel, UTC day)** — a domain-separated SHA-256 (`remd_<base64url>`), mirroring the A30 recorded rationale for content-derived ids. **Recorded interpretation:** the UTC day is that of the *effective* (post-deferral) fire instant, which makes identity invariant across computation instants (no midnight double-dispatch) and "at most one reminder per (task, window, rung, channel) per UTC day" explicit and testable.
+### 5. PHI discipline (hard requirement)
 
-- Recomputing the schedule over unchanged inputs yields byte-identical reminders — proven twice and across a serialized re-instantiation (canonical JSON with Dates as epoch-ms).
-- A **send-attempt ledger** records what was actually dispatched: one row per reminder identity, keyed by reminder id, recording BOTH sent and undeliverable outcomes (a failed dispatch is still a dispatch of record — never a silent drop). A ledgered reminder is never re-sent under the same identity.
-- A deliberate **daily re-nudge recurrence is NOT invented** (no requirement specifies it; the safe non-spamming reading wins). Re-nudges emerge from the measurement scheduler's window roll-forward: a rolled task has a NEW window identity ⇒ new reminders.
+Reminder payloads reference **task/metric/window ids and human-safe
+vocabulary labels ONLY** — never observation values, never evidence
+content, never person ids, never concept codes, never person-identifying
+free text. `dueAt` is schedule metadata (the plan cadence's window edge).
+Labels are caller-supplied vocabulary passed through verbatim under a
+hard cap (≤ 80 chars, no control characters) — label *content* is the
+caller's responsibility (vocabulary display names, not person data).
+Proven with `not.toContain`-style proofs over every payload shape in
+`src/phi.test.ts` (the `@orbb/observability` PHI-proof pattern), plus
+structural key-allowlist checks. The only person-carrying planes are the
+routing envelope (`ChannelSendRequest.personId` — channels must address
+their own targets) and the frozen §11 envelope `subject`.
 
-### Delivery channels (provider portability)
+## Journey #7 role (M6 exit criterion)
 
-`NotificationChannel` is the fail-closed port: typed send results, per-channel capability flags (`canRemind`, `canCarryFallbackOffer`), and an accounted skip when a channel cannot satisfy a rung's requirements. Channels see ONLY the PHI-free payload plus an opaque `recipientRef` pseudonym — never a person id.
+> "User misses task → reminder → fallback provider offered → authorized
+> restriction applied only if configured."
 
-Doubles only, in this packet:
+This package is the **engine head** of that journey:
 
-- `InMemoryChannel` — the test/impl default, with deterministic fault injection.
-- `SyntheticWebPushChannel` / `SyntheticEmailChannel` — **seam-only SYNTH doubles** that shape the provider contract (endpoint directories, subscription-expiry semantics, deterministic receipts) with no network, no SDK, no VAPID/SMTP — the M4-C/M5-C seam pattern. Real adapters arrive behind the same interface.
+1. **Misses task** — missed-window detection (`now ≥ window.endsAt`,
+   task still open).
+2. **Reminder** — the pre-due `REMIND` dispatch, then the missed-window
+   escalation.
+3. **Fallback provider offered** — the `REMIND_WITH_FALLBACK_OFFER`
+   payload carries the task's **recorded fallback vocabulary**
+   (`methodOrder` after the preferred method) **verbatim and in order**.
+   The offer is **DATA, not a decision**: the engine never ranks, filters,
+   or orders providers, and carries no selection field of its own.
+4. **Authorized restriction applied only if configured** — **NOT this
+   package**. That is B10 (adherence-enforcement abstraction,
+   Lane C) — the engine deliberately ships no enforcement vocabulary.
 
-### PHI discipline (hard requirement)
+`escalation.test.ts` walks the full engine-side journey end-to-end.
 
-Reminder payloads reference **task/metric/window ids and human-safe labels ONLY** — never observation values, never evidence content, never person-identifying free text, never concept codes (present on the task snapshot, deliberately stripped). Proven by `not.toContain`-style tests over every payload variant (rung 1, rung 2 with the fallback offer, deferred), the channel-visible delivery requests, provider receipts, ledger rows, and the schedule audit view (`toScheduleAuditView` — the observability projection). `serializeReminderSchedule` (the full-fidelity form including the internal `personId` addressing field) is internal-only and never a logging surface.
+## Events
 
-## Recorded handoffs (integration boundaries)
+Every successful dispatch emits one **`TASK_DUE`** event through the
+injected `ReminderEventSink` — the frozen contracts §11 envelope
+(`eventId` from the injected id-factory, `version: 1`,
+`payloadSchemaVersion: "1.0.0"`, `causationId` = the reminder id, payload
+= canonical JSON of `{ reminderId, channelId, reminder }`). **Recorded
+actor assumption:** the subject person is recorded as the actor
+(time-driven events have no initiating person/device/source; a dedicated
+service-account actor kind is reserved for tech-lead review per
+`@orbb/domain` `provenance.ts`).
 
-1. **Worker wiring (`apps/worker`)** — the Cloudflare Worker consumer that drains the domain-event outbox, loads task snapshots + preference profiles, and calls `dispatchPending` on a periodic tick. `apps/worker` is an M0 no-op shell today; per the B8 scope rule the seam is recorded, not wired.
-2. **DB adapters** — `SendAttemptLedger` (async), `RecipientDirectory`, `ChannelRegistry`, `ReminderLabelDirectory` are ports shaped for persistence; Postgres implementations arrive with the db integration packet.
-3. **Provider adapters** — real Web Push (VAPID) and email (SMTP/SES) channels behind `NotificationChannel`.
-4. **IANA timezones** — offset resolution for the local-of-record happens at the app boundary.
-5. **B10 boundary** — adherence enforcement / authorized restrictions are B10's abstraction.
-6. **Shared kernel** — `NotificationResult`, canonical JSON, and hashing are local mirrors of the measurement/intents lane helpers (same recorded dependency-budget rationale); a future shared kernel package would let all lanes adopt them mechanically.
+## Recorded assumptions & handoffs
 
-## Dependency-budget note
-
-`@orbb/measurement` is imported **types-only** (`import type { MeasurementTask, MeasurementWindow }`), so the built `dist/` has zero runtime imports of it. Local mirrors (`result.ts`, `canonical.ts`, id derivation) keep the package's runtime surface to `@orbb/domain` guards + `node:crypto`. `NotificationResult` is structurally identical to the measurement lane's `EngineResult` and the intents lane's `IntentResult`.
+| # | Assumption / handoff |
+|---|---|
+| 1 | Quiet hours default 22:00–07:00 local-of-record (work order); local-of-record = fixed UTC offset (DST is a deployment concern). |
+| 2 | `leadMinutes` default 60; `escalationDelayMinutes` default 30; `maxDispatchAttempts` default 3. |
+| 3 | Missed window with no fallback vocabulary (single recorded method) stays on the `REMIND` rung (gentle nudge) — the engine never invents vocabulary. |
+| 4 | Unlisted channels default to enabled; `remindersEnabled: false` is the master off-gate. |
+| 5 | `TASK_DUE` used for dispatched reminders (frozen vocabulary — no REMINDER_DISPATCHED type exists; adding one is a tech-lead decision). |
+| 6 | Actor = subject person on TASK_DUE envelopes (service-account actor needs tech-lead review). |
+| 7 | **Handoff:** db adapters for the ledger + event sink (the transactional-outbox coupling — ledger write and outbox write in one transaction — arrives with the `@orbb/db` integration packet; `event-sink-failure` after a recorded delivery is the documented at-least-once window). |
+| 8 | **Handoff:** worker wiring (`apps/worker`) — a tick loop calling `dispatchDue` over task snapshots; deliberately NOT added in this work item (deployment concern, additive module allowed by the work order but not required). |
+| 9 | **Handoff:** real Web Push (VAPID) and transactional-email provider adapters implement the provider ports; OS-level adherence enforcement is B10 (Lane C). |
 
 ## Scripts
 
-Same as every lane package: `lint` (eslint), `typecheck` (tsc --noEmit), `test` (vitest run), `build` (tsc → `dist/`).
+`pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm build` — same as every
+`@orbb/*` package (turbo-driven from the repo root).

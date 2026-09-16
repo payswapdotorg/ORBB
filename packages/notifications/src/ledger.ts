@@ -1,90 +1,176 @@
 /**
- * Send-attempt ledger (B8) — the idempotency ledger of record.
+ * B8 — The send-attempt ledger (what was ACTUALLY dispatched).
  *
- * The ledger records WHAT WAS ACTUALLY DISPATCHED: one {@link SendAttempt}
- * per dispatched reminder identity, whether the delivery succeeded or was
- * undeliverable (a fail-closed recorded outcome is still a dispatch
- * ATTEMPT of record — never a silent drop). Ledger entries are PHID-free:
- * reminder id, channel, rung, outcome, timestamp — the payload itself is
- * deterministically reproducible from schedule inputs, so it is not
- * duplicated into the ledger.
+ * RECORDED DESIGN DECISIONS:
  *
- * EXACTLY-ONCE SEMANTICS (recorded): the ledger is keyed by REMINDER id.
- * A reminder with any recorded attempt — sent OR undeliverable — is never
- * re-sent under the same identity; retries flow through NEW reminder
- * identities (new windows after the scheduler's roll-forward). This is
- * the anti-spam direction required by the "gentle" ladder: a failed
- * delivery is visible (recorded reason), and the engine does not hammer a
- * failing channel within one reminder identity.
+ * - The ledger is the dispatch idempotency boundary: it keys records by
+ *   the deterministic `ReminderId`, so a delivered reminder is dispatched
+ *   EXACTLY ONCE, ever — recomputing the schedule over unchanged inputs
+ *   adds nothing, and the engine skips already-dispatched reminders with
+ *   an accounted reason.
+ *
+ * - Record shape mirrors the `@orbb/contracts` `OutboxRecord` bookkeeping
+ *   style: one row per reminder id, an `attempts` counter, the LATEST
+ *   attempt's status (`dispatched` | `failed`), and the last failure
+ *   reason. A FAILED attempt is recorded but does NOT block a later retry
+ *   (the person never received it) until `attempts` reaches the engine's
+ *   `maxDispatchAttempts` cap — after which the reminder is skipped with
+ *   reason `retries-exhausted` (fail-closed, recorded, never silent).
+ *
+ * - The ledger is PERSON-FREE by design: `taskId` is enough to correlate
+ *   back to the person through the task store (the observability
+ *   discipline — person ids are denied in log-shaped records). It is also
+ *   observation-free and evidence-free: only ids, the rung, the channel,
+ *   attempt bookkeeping, and classified failure reasons.
+ *
+ * - Persistence port is async (db adapter arrives in a later integration
+ *   packet — handoff recorded); `InMemoryReminderDispatchLedger` is the
+ *   reference double with defensive copies in and out.
  */
-import type { ReminderId, SendAttemptId } from "./ids.js";
-import type { ChannelSendResult } from "./channels.js";
-import type { NotificationChannelId, ReminderRung } from "./vocabulary.js";
+import type { TaskId } from "@orbb/domain";
+import type { ReminderId } from "./identity.js";
+import type { ReminderRung } from "./payloads.js";
+import type { DeliveryFailureReason } from "./channels.js";
 
-/**
- * One recorded dispatch of one reminder (the ledger's row shape —
- * PHID-free by construction).
- */
-export interface SendAttempt {
-  /** Creation-scoped attempt id (`snd_<body>`, testkit IdFactory source). */
-  readonly id: SendAttemptId;
-  /** The dispatched reminder's deterministic identity (the ledger key). */
+/** Lifecycle statuses of a reminder's dispatch (latest attempt). */
+export const REMINDER_DISPATCH_STATUSES = ["dispatched", "failed"] as const;
+
+export type ReminderDispatchStatus = (typeof REMINDER_DISPATCH_STATUSES)[number];
+
+/** Type guard: is `value` a canonical dispatch status? */
+export function isReminderDispatchStatus(value: unknown): value is ReminderDispatchStatus {
+  return (
+    typeof value === "string" &&
+    (REMINDER_DISPATCH_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/** One send attempt, handed to the ledger by the engine. */
+export interface ReminderAttemptRecord {
   readonly reminderId: ReminderId;
-  readonly channel: NotificationChannelId;
+  readonly taskId: TaskId;
+  readonly channelId: string;
   readonly rung: ReminderRung;
-  /** The fail-closed outcome: `sent`, or `undeliverable` WITH its reason. */
-  readonly outcome: ChannelSendResult;
-  readonly dispatchedAt: Date;
+  /** Outcome of THIS attempt. */
+  readonly status: ReminderDispatchStatus;
+  readonly attemptedAt: Date;
+  /** Present exactly on failed attempts. */
+  readonly failureReason?: DeliveryFailureReason;
+  /** Present exactly on failed attempts with a detail. */
+  readonly failureDetail?: string;
+}
+
+/** The accumulated dispatch record for one reminder id. */
+export interface ReminderDispatchRecord {
+  readonly reminderId: ReminderId;
+  readonly taskId: TaskId;
+  readonly channelId: string;
+  readonly rung: ReminderRung;
+  /** Latest attempt's outcome. */
+  readonly status: ReminderDispatchStatus;
+  /** Total attempts recorded for this reminder (>= 1). */
+  readonly attempts: number;
+  readonly firstAttemptedAt: Date;
+  readonly lastAttemptedAt: Date;
+  /** Present exactly when the latest attempt delivered. */
+  readonly deliveredAt?: Date;
+  /** Present exactly when the latest attempt failed. */
+  readonly lastFailureReason?: DeliveryFailureReason;
+  readonly lastFailureDetail?: string;
 }
 
 /**
- * The persistence port for send attempts (async — the db adapter arrives
- * in a later integration packet, handoff recorded in README.md; the
- * in-memory ledger is the reference double).
+ * Persistence port for dispatch records. `recordAttempt` is idempotent per
+ * reminder id: it appends ONE attempt (creating the record on the first
+ * attempt, updating bookkeeping on later ones) and returns the accumulated
+ * record. There is never more than one record per reminder id.
  */
-export interface SendAttemptLedger {
-  /**
-   * Records an attempt, UPSERTED BY REMINDER ID: a second `record` for an
-   * already-ledgered reminder id is a no-op (exactly-once rows).
-   */
-  record(attempt: SendAttempt): Promise<void>;
-  /** The recorded attempt for a reminder id, when one exists. */
-  findByReminderId(reminderId: ReminderId): Promise<SendAttempt | undefined>;
-  /** All recorded attempts in ledger order (defensive copies). */
-  listAll(): Promise<readonly SendAttempt[]>;
+export interface ReminderDispatchLedger {
+  findById(reminderId: ReminderId): Promise<ReminderDispatchRecord | undefined>;
+  recordAttempt(attempt: ReminderAttemptRecord): Promise<ReminderDispatchRecord>;
 }
 
-/** In-memory reference {@link SendAttemptLedger} (defensive copies in and out). */
-export class InMemorySendAttemptLedger implements SendAttemptLedger {
-  readonly #attempts = new Map<string, SendAttempt>();
+/** In-memory reference `ReminderDispatchLedger` (defensive copies in/out). */
+export class InMemoryReminderDispatchLedger implements ReminderDispatchLedger {
+  readonly #records = new Map<string, ReminderDispatchRecord>();
 
-  async record(attempt: SendAttempt): Promise<void> {
-    if (!this.#attempts.has(attempt.reminderId)) {
-      this.#attempts.set(attempt.reminderId, cloneAttempt(attempt));
+  async findById(reminderId: ReminderId): Promise<ReminderDispatchRecord | undefined> {
+    const record = this.#records.get(reminderId);
+    return record === undefined ? undefined : cloneDispatchRecord(record);
+  }
+
+  async recordAttempt(attempt: ReminderAttemptRecord): Promise<ReminderDispatchRecord> {
+    const existing = this.#records.get(attempt.reminderId);
+    if (existing === undefined) {
+      const created: ReminderDispatchRecord = {
+        reminderId: attempt.reminderId,
+        taskId: attempt.taskId,
+        channelId: attempt.channelId,
+        rung: attempt.rung,
+        status: attempt.status,
+        attempts: 1,
+        firstAttemptedAt: new Date(attempt.attemptedAt.getTime()),
+        lastAttemptedAt: new Date(attempt.attemptedAt.getTime()),
+        ...(attempt.status === "dispatched"
+          ? { deliveredAt: new Date(attempt.attemptedAt.getTime()) }
+          : {}),
+        ...(attempt.status === "failed" && attempt.failureReason !== undefined
+          ? { lastFailureReason: attempt.failureReason }
+          : {}),
+        ...(attempt.status === "failed" && attempt.failureDetail !== undefined
+          ? { lastFailureDetail: attempt.failureDetail }
+          : {}),
+      };
+      this.#records.set(attempt.reminderId, created);
+      return cloneDispatchRecord(created);
     }
+    const updated: ReminderDispatchRecord = {
+      reminderId: attempt.reminderId,
+      taskId: attempt.taskId,
+      channelId: attempt.channelId,
+      rung: attempt.rung,
+      status: attempt.status,
+      attempts: existing.attempts + 1,
+      firstAttemptedAt: new Date(existing.firstAttemptedAt.getTime()),
+      lastAttemptedAt: new Date(attempt.attemptedAt.getTime()),
+      ...(attempt.status === "dispatched"
+        ? { deliveredAt: new Date(attempt.attemptedAt.getTime()) }
+        : {}),
+      ...(attempt.status === "failed" && attempt.failureReason !== undefined
+        ? { lastFailureReason: attempt.failureReason }
+        : {}),
+      ...(attempt.status === "failed" && attempt.failureDetail !== undefined
+        ? { lastFailureDetail: attempt.failureDetail }
+        : {}),
+    };
+    this.#records.set(attempt.reminderId, updated);
+    return cloneDispatchRecord(updated);
   }
 
-  async findByReminderId(reminderId: ReminderId): Promise<SendAttempt | undefined> {
-    const attempt = this.#attempts.get(reminderId);
-    return attempt === undefined ? undefined : cloneAttempt(attempt);
-  }
-
-  async listAll(): Promise<readonly SendAttempt[]> {
-    return [...this.#attempts.values()].map(cloneAttempt);
+  /** All records in first-attempt (insertion) order — deterministic per call sequence. */
+  listAll(): readonly ReminderDispatchRecord[] {
+    return [...this.#records.values()].map(cloneDispatchRecord);
   }
 }
 
-function cloneAttempt(attempt: SendAttempt): SendAttempt {
+function cloneDispatchRecord(record: ReminderDispatchRecord): ReminderDispatchRecord {
   return {
-    ...attempt,
-    outcome: cloneOutcome(attempt.outcome),
-    dispatchedAt: new Date(attempt.dispatchedAt.getTime()),
+    reminderId: record.reminderId,
+    taskId: record.taskId,
+    channelId: record.channelId,
+    rung: record.rung,
+    status: record.status,
+    attempts: record.attempts,
+    firstAttemptedAt: new Date(record.firstAttemptedAt.getTime()),
+    lastAttemptedAt: new Date(record.lastAttemptedAt.getTime()),
+    ...(record.deliveredAt !== undefined
+      ? { deliveredAt: new Date(record.deliveredAt.getTime()) }
+      : {}),
+    ...(record.lastFailureReason !== undefined
+      ? { lastFailureReason: record.lastFailureReason }
+      : {}),
+    ...(record.lastFailureDetail !== undefined
+      ? { lastFailureDetail: record.lastFailureDetail }
+      : {}),
   };
-}
-
-function cloneOutcome(outcome: ChannelSendResult): ChannelSendResult {
-  if (outcome.status === "sent") {
-    return { ...outcome, deliveredAt: new Date(outcome.deliveredAt.getTime()) };
-  }
-  return { ...outcome, reason: { ...outcome.reason } };
 }

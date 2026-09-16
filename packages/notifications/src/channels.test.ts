@@ -1,280 +1,382 @@
 import { describe, expect, it } from "vitest";
-import { DeterministicClock, DeterministicIdFactory } from "@orbb/testkit";
+import { DeterministicClock } from "@orbb/testkit";
 import {
-  FULL_CHANNEL_CAPABILITIES,
-  InMemoryChannel,
-  InMemoryChannelRegistry,
-  InMemoryRecipientEndpointDirectory,
-  RUNG_CAPABILITY_REQUIREMENTS,
-  SyntheticEmailChannel,
-  SyntheticWebPushChannel,
-  type OutboundDelivery,
-} from "./channels.js";
-import { ReminderEngine } from "./engine.js";
-import { InMemorySendAttemptLedger } from "./ledger.js";
-import { InMemoryReminderLabelDirectory } from "./labels.js";
-import { InMemoryRecipientDirectory } from "./recipients.js";
-import {
-  MS_PER_DAY,
-  MS_PER_HOUR,
+  HOUR,
+  MINUTE,
   buildNotificationHarness,
-  harnessProfile,
-  syntheticTask,
+  synthPreferences,
+  synthTask,
+  synthTaskId,
 } from "./testsupport.js";
+import {
+  InMemoryChannel,
+  type InMemorySentRecord,
+} from "./inmemory-channel.js";
+import {
+  DELIVERY_FAILURE_REASONS,
+  InMemoryChannelRegistry,
+  isDeliveryFailureReason,
+  isDeliveryResult,
+  sendForRung,
+  type ChannelSendRequest,
+  type DeliveryResult,
+  type NotificationChannel,
+} from "./channels.js";
+import { EmailChannel, type EmailAddressProvider } from "./email-channel.js";
+import { WebPushChannel, type WebPushSubscriptionProvider } from "./webpush-channel.js";
+import { deriveReminderId } from "./identity.js";
+import { cloneReminderPayload, type ReminderPayload } from "./payloads.js";
+import { NotificationEngineError } from "./errors.js";
+import type { QuietHoursSpec } from "./preferences.js";
 
-/** Computes one real reminder via the default harness and returns its delivery request. */
-async function oneDelivery(): Promise<OutboundDelivery> {
-  const harness = buildNotificationHarness({ epochMs: MS_PER_DAY + 70 * 60_000 });
-  const task = syntheticTask({
-    window: {
-      sequence: 0,
-      startsAt: new Date(MS_PER_DAY),
-      endsAt: new Date(MS_PER_DAY + 2 * MS_PER_HOUR),
-    },
-  });
-  const schedule = harness.engine.computeSchedule({
-    tasks: [task],
-    profile: harnessProfile({ quietHours: null }),
-  });
-  if (!schedule.ok) {
-    throw new Error("expected scheduling to succeed");
-  }
-  const reminder = schedule.value.reminders[0];
-  if (reminder === undefined) {
-    throw new Error("expected one reminder");
-  }
+/** Noon UTC on Wednesday 2026-06-10 — outside the default quiet window. */
+const NOON = Date.UTC(2026, 5, 10, 12, 0, 0);
+
+function noQuietHours(): QuietHoursSpec {
+  return { enabled: false, startLocalMinutes: 1320, endLocalMinutes: 420 };
+}
+
+function endsAtWindow(): Date {
+  return new Date(NOON + 2 * HOUR);
+}
+
+/** A minimal REMIND payload for direct channel requests. */
+function synthRequest(rungPayload: ReminderPayload): ChannelSendRequest {
   return {
-    reminderId: reminder.id,
-    recipientRef: "SYNTH-recipient-00000001",
-    channel: "inmem",
-    payload: reminder.payload,
+    reminderId: deriveReminderId({
+      taskId: synthTaskId(1),
+      windowSequence: 0,
+      rung: "REMIND",
+      channelId: "test",
+      utcDay: 20_000,
+    }),
+    personId: synthTask().personId,
+    payload: rungPayload,
   };
 }
 
-describe("B8 channels — the InMemoryChannel double (test/impl default)", () => {
-  it("records every delivery and result in order with a deterministic SYNTH receipt", async () => {
-    const clock = new DeterministicClock({ epochMs: 1_000 });
-    const channel = new InMemoryChannel({ id: "inmem", clock });
-    const delivery = await oneDelivery();
-    const first = await channel.send(delivery);
-    expect(first.status).toBe("sent");
-    if (first.status !== "sent") {
-      throw new Error("unreachable");
+function remindPayload(): ReminderPayload {
+  return {
+    kind: "REMIND",
+    reason: "upcoming-due",
+    taskId: synthTaskId(1),
+    metricId: "metric-synth-heart-rate",
+    windowSequence: 0,
+    dueAt: new Date(NOON + 2 * HOUR),
+  };
+}
+
+describe("B8 InMemoryChannel — the test/impl default double", () => {
+  it("delivers with a deterministic SYNTH receipt and records the send", async () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const channel = new InMemoryChannel({ id: "inapp-test", clock: harness.clock });
+    const delivery = await channel.sendReminder(synthRequest(remindPayload()));
+    expect(delivery.status).toBe("delivered");
+    if (delivery.status === "delivered") {
+      expect(delivery.providerReceipt).toBe("synth:inapp-test:delivered");
+      expect(delivery.deliveredAt.getTime()).toBe(NOON);
     }
-    expect(first.deliveredAt.getTime()).toBe(1_000);
-    expect(first.providerReceipt).toBeDefined();
-    expect(first.providerReceipt?.startsWith("SYNTH-inmem-provider-v1-")).toBe(true);
-    clock.advance(5_000);
-    await channel.send(delivery);
-    expect(channel.recorded).toHaveLength(2);
-    // Deterministic receipt: same delivery => same receipt, always.
-    expect(channel.recorded[1]?.result.status).toBe("sent");
-    if (channel.recorded[1] && channel.recorded[1].result.status === "sent") {
-      expect(channel.recorded[1].result.providerReceipt).toBe(first.providerReceipt);
-    }
-    // The recorded entries are defensive copies: mutating a returned
-    // snapshot cannot corrupt the channel's log.
-    const snapshot = [...channel.recorded];
-    expect(snapshot).toHaveLength(2);
-    snapshot.pop();
-    expect(channel.recorded).toHaveLength(2);
+    expect(channel.sentCount).toBe(1);
+    const sent: InMemorySentRecord = channel.getSent()[0]!;
+    expect(sent.rung).toBe("REMIND");
+    expect(sent.payload.kind).toBe("REMIND");
+    expect(sent.sentAt.getTime()).toBe(NOON);
   });
 
-  it("surfaces the fault-injection contract: throw mode rejects (the engine converts)", async () => {
-    const clock = new DeterministicClock();
-    const channel = new InMemoryChannel({ id: "bad", clock, fault: { mode: "throw" } });
-    const delivery = await oneDelivery();
-    await expect(channel.send(delivery)).rejects.toThrow(
-      "SYNTH in-memory channel transport failure (fault injection)",
-    );
-    expect(channel.recorded).toHaveLength(0);
+  it("getSent returns defensive copies (mutating a record cannot corrupt the double)", async () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const channel = new InMemoryChannel({ clock: harness.clock });
+    await channel.sendReminder(synthRequest(remindPayload()));
+    const record = channel.getSent()[0]!;
+    record.payload.dueAt.setTime(0);
+    record.sentAt.setTime(0);
+    const fresh = channel.getSent()[0]!;
+    expect(fresh.payload.dueAt.getTime()).toBe(NOON + 2 * HOUR);
+    expect(fresh.sentAt.getTime()).toBe(NOON);
   });
 
-  it("surfaces the fault-injection contract: undeliverable mode returns the typed reason", async () => {
-    const clock = new DeterministicClock();
-    const channel = new InMemoryChannel({
-      id: "rejecting",
-      clock,
-      fault: { mode: "undeliverable", reason: { kind: "payload-rejected" } },
+  it("a programmed failure returns a classified undelivered result", async () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const channel = new InMemoryChannel({ clock: harness.clock });
+    channel.setFailureMode({ kind: "fail", reason: "rate-limited", detail: "SYNTH-throttled" });
+    const delivery = await channel.sendFallbackOffer(synthRequest(remindPayload()));
+    expect(delivery).toEqual({
+      status: "undelivered",
+      reason: "rate-limited",
+      detail: "SYNTH-throttled",
     });
-    const delivery = await oneDelivery();
-    const result = await channel.send(delivery);
-    expect(result).toEqual({ status: "undeliverable", reason: { kind: "payload-rejected" } });
-    expect(channel.recorded).toHaveLength(1);
+    expect(channel.sentCount).toBe(1);
+    expect(isDeliveryResult(delivery)).toBe(true);
   });
 
-  it("honors injected restricted capabilities", () => {
-    const clock = new DeterministicClock();
-    const channel = new InMemoryChannel({
-      id: "basic",
-      clock,
-      capabilities: { canRemind: true, canCarryFallbackOffer: false },
-    });
-    expect(channel.capabilities).toEqual({ canRemind: true, canCarryFallbackOffer: false });
-    expect(FULL_CHANNEL_CAPABILITIES).toEqual({ canRemind: true, canCarryFallbackOffer: true });
+  it("sendForRung dispatches to the typed operation matching the rung", async () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const channel = new InMemoryChannel({ clock: harness.clock });
+    await sendForRung(channel, "REMIND_WITH_FALLBACK_OFFER", synthRequest(remindPayload()));
+    expect(channel.getSent()[0]!.rung).toBe("REMIND_WITH_FALLBACK_OFFER");
   });
 });
 
-describe("B8 channels — the channel registry", () => {
-  it("resolves by id, lists in registration order, and rejects duplicate ids", () => {
-    const clock = new DeterministicClock();
-    const a = new InMemoryChannel({ id: "alpha", clock });
-    const b = new InMemoryChannel({ id: "beta", clock });
-    const registry = new InMemoryChannelRegistry([a, b]);
-    expect(registry.resolve("alpha")).toBe(a);
-    expect(registry.resolve("beta")).toBe(b);
-    expect(registry.resolve("ghost")).toBeUndefined();
-    expect(registry.list()).toEqual([a, b]);
-    expect(() => new InMemoryChannelRegistry([a, a])).toThrow(/duplicate channel id/);
-  });
-
-  it("freezes the rung capability requirements table", () => {
-    expect(RUNG_CAPABILITY_REQUIREMENTS.REMIND).toEqual(["canRemind"]);
-    expect(RUNG_CAPABILITY_REQUIREMENTS.REMIND_WITH_FALLBACK_OFFER).toEqual([
-      "canRemind",
-      "canCarryFallbackOffer",
-    ]);
-  });
-});
-
-describe("B8 channels — SYNTH web-push/email provider doubles (seam-only)", () => {
-  it("delivers to an active endpoint with a deterministic SYNTH receipt", async () => {
-    const clock = new DeterministicClock({ epochMs: 2_000 });
-    const endpoints = new InMemoryRecipientEndpointDirectory();
-    endpoints.register("SYNTH-recipient-00000001", {
-      token: "SYNTH-webpush-endpoint-0001",
-      status: "active",
+describe("B8 fail-closed delivery — a rogue channel can never crash the engine", () => {
+  it("a channel that THROWS is converted into a recorded channel-error failure; the engine result stays ok", async () => {
+    const harness = buildNotificationHarness({ epochMs: NOON + 90 * MINUTE });
+    harness.channel.setFailureMode({ kind: "throw" });
+    const outcome = await harness.engine.dispatchDue({
+      tasks: [synthTask({ endsAt: endsAtWindow() })],
+      preferences: synthPreferences({ quietHours: noQuietHours() }),
+      channels: harness.registry,
     });
-    const channel = new SyntheticWebPushChannel({ clock, endpoints });
-    const delivery = await oneDelivery();
-    const result = await channel.send(delivery);
-    expect(result.status).toBe("sent");
-    if (result.status !== "sent") {
-      throw new Error("unreachable");
-    }
-    expect(result.deliveredAt.getTime()).toBe(2_000);
-    expect(result.providerReceipt?.startsWith("SYNTH-webpush-provider-v1-")).toBe(true);
-    // Deterministic: the same delivery replays the same receipt.
-    const again = await channel.send(delivery);
-    if (again.status !== "sent") {
-      throw new Error("unreachable");
-    }
-    expect(again.providerReceipt).toBe(result.providerReceipt);
-  });
-
-  it("fails closed with unknown-recipient-endpoint when the directory misses", async () => {
-    const clock = new DeterministicClock();
-    const endpoints = new InMemoryRecipientEndpointDirectory();
-    const webpush = new SyntheticWebPushChannel({ clock, endpoints });
-    const email = new SyntheticEmailChannel({ clock, endpoints });
-    const delivery = await oneDelivery();
-    expect(await webpush.send(delivery)).toEqual({
-      status: "undeliverable",
-      reason: { kind: "unknown-recipient-endpoint" },
-    });
-    expect(await email.send(delivery)).toEqual({
-      status: "undeliverable",
-      reason: { kind: "unknown-recipient-endpoint" },
-    });
-  });
-
-  it("fails closed with recipient-endpoint-expired (the real web-push 410-Gone semantics)", async () => {
-    const clock = new DeterministicClock();
-    const endpoints = new InMemoryRecipientEndpointDirectory();
-    endpoints.register("SYNTH-recipient-00000001", {
-      token: "SYNTH-webpush-endpoint-0001",
-      status: "expired",
-    });
-    const webpush = new SyntheticWebPushChannel({ clock, endpoints });
-    const email = new SyntheticEmailChannel({ clock, endpoints });
-    const delivery = await oneDelivery();
-    expect(await webpush.send(delivery)).toEqual({
-      status: "undeliverable",
-      reason: { kind: "recipient-endpoint-expired" },
-    });
-    expect(await email.send(delivery)).toEqual({
-      status: "undeliverable",
-      reason: { kind: "recipient-endpoint-expired" },
-    });
-  });
-
-  it("issues email receipts through the email provider identity", async () => {
-    const clock = new DeterministicClock();
-    const endpoints = new InMemoryRecipientEndpointDirectory();
-    endpoints.register("SYNTH-recipient-00000001", {
-      token: "SYNTH-email-endpoint-0001",
-      status: "active",
-    });
-    const email = new SyntheticEmailChannel({ clock, endpoints });
-    const delivery = await oneDelivery();
-    const result = await email.send(delivery);
-    expect(result.status).toBe("sent");
-    if (result.status !== "sent") {
-      throw new Error("unreachable");
-    }
-    expect(result.providerReceipt?.startsWith("SYNTH-email-provider-v1-")).toBe(true);
-  });
-});
-
-describe("B8 channels — engine wiring over the SYNTH doubles end-to-end", () => {
-  it("delivers a due reminder through webpush-synth and email-synth with recorded receipts", async () => {
-    const harness = buildNotificationHarness({ epochMs: MS_PER_DAY + 70 * 60_000 });
-    const task = syntheticTask({
-      window: {
-        sequence: 0,
-        startsAt: new Date(MS_PER_DAY),
-        endsAt: new Date(MS_PER_DAY + 2 * MS_PER_HOUR),
-      },
-    });
-    const result = await harness.engine.dispatchPending({
-      tasks: [task],
-      profile: harnessProfile({ quietHours: null, channels: ["webpush-synth", "email-synth"] }),
-    });
-    if (!result.ok) {
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) {
       throw new Error("expected dispatch to succeed");
     }
-    expect(result.value.dispatched.map((attempt) => attempt.outcome.status)).toEqual([
-      "sent",
-      "sent",
-    ]);
-    for (const attempt of result.value.dispatched) {
-      if (attempt.outcome.status !== "sent") {
-        throw new Error("unreachable");
+    expect(outcome.value.dispatched).toEqual([]);
+    expect(outcome.value.failures).toHaveLength(1);
+    expect(outcome.value.failures[0]!.reason).toBe("channel-error");
+    expect(outcome.value.failures[0]!.detail).toBe("channel-send-threw");
+    const record = harness.ledger.listAll()[0]!;
+    expect(record.status).toBe("failed");
+    expect(record.lastFailureReason).toBe("channel-error");
+    // No event for an undelivered reminder.
+    expect(harness.eventSink.getEvents()).toHaveLength(0);
+  });
+
+  it("a channel returning a malformed result is converted into a recorded channel-error failure", async () => {
+    class RogueResultChannel implements NotificationChannel {
+      readonly id = "rogue-result";
+      readonly kind = "inapp" as const;
+      readonly capabilities = { supportsRemind: true, supportsFallbackOffer: true };
+      async sendReminder(): Promise<DeliveryResult> {
+        return {} as unknown as DeliveryResult;
       }
-      expect(attempt.outcome.providerReceipt).toBeDefined();
+      async sendFallbackOffer(): Promise<DeliveryResult> {
+        return null as unknown as DeliveryResult;
+      }
     }
-  });
-
-  it("works over an empty recipient directory fail-closed (the engine records, never crashes)", async () => {
-    const clock = new DeterministicClock({ epochMs: MS_PER_DAY + 70 * 60_000 });
-    const endpoints = new InMemoryRecipientEndpointDirectory();
-    const engine = new ReminderEngine({
-      clock,
-      ids: new DeterministicIdFactory({ seed: "e2e" }),
-      channels: new InMemoryChannelRegistry([
-        new SyntheticWebPushChannel({ clock, endpoints }),
-      ]),
-      ledger: new InMemorySendAttemptLedger(),
-      recipients: new InMemoryRecipientDirectory(),
-      labels: new InMemoryReminderLabelDirectory({}),
+    const harness = buildNotificationHarness({
+      epochMs: NOON + 90 * MINUTE,
+      channels: [new RogueResultChannel()],
     });
-    const task = syntheticTask({
-      window: {
-        sequence: 0,
-        startsAt: new Date(MS_PER_DAY),
-        endsAt: new Date(MS_PER_DAY + 2 * MS_PER_HOUR),
-      },
+    const outcome = await harness.engine.dispatchDue({
+      tasks: [synthTask({ endsAt: endsAtWindow() })],
+      preferences: synthPreferences({ quietHours: noQuietHours() }),
+      channels: harness.registry,
     });
-    const result = await engine.dispatchPending({
-      tasks: [task],
-      profile: harnessProfile({ quietHours: null, channels: ["webpush-synth"] }),
-    });
-    if (!result.ok) {
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) {
       throw new Error("expected dispatch to succeed");
     }
-    expect(result.value.dispatched[0]?.outcome).toEqual({
-      status: "undeliverable",
-      reason: { kind: "unknown-recipient" },
+    expect(outcome.value.failures).toHaveLength(1);
+    expect(outcome.value.failures[0]!.reason).toBe("channel-error");
+    expect(outcome.value.failures[0]!.detail).toBe("channel-returned-invalid-result");
+    expect(harness.ledger.listAll()[0]!.status).toBe("failed");
+  });
+});
+
+describe("B8 capability gating — accounted skips, never silent", () => {
+  it("a channel without the fallback-offer capability is skipped for the offer rung with an accounted reason", async () => {
+    const endsAtMs = NOON + 2 * HOUR;
+    const harness = buildNotificationHarness({ epochMs: endsAtMs });
+    const remindersOnly = new InMemoryChannel({
+      id: "reminders-only",
+      clock: harness.clock,
+      capabilities: { supportsRemind: true, supportsFallbackOffer: false },
     });
+    const registry = new InMemoryChannelRegistry([remindersOnly]);
+    const schedule = harness.engine.computeSchedule({
+      tasks: [synthTask({ endsAt: new Date(endsAtMs) })],
+      preferences: synthPreferences({ quietHours: noQuietHours() }),
+      channels: registry,
+    });
+    if (!schedule.ok) {
+      throw new Error("expected computation to succeed");
+    }
+    expect(schedule.value.reminders).toEqual([]);
+    expect(schedule.value.skipped).toHaveLength(1);
+    const skip = schedule.value.skipped[0]!;
+    expect(skip.reason).toBe("channel-lacks-capability");
+    expect(skip.detail).toContain("REMIND_WITH_FALLBACK_OFFER");
+    expect(skip.rung).toBe("REMIND_WITH_FALLBACK_OFFER");
+    expect(skip.channelId).toBe("reminders-only");
+  });
+
+  it("the same channel still receives the REMIND rung it does support", async () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const remindersOnly = new InMemoryChannel({
+      id: "reminders-only",
+      clock: harness.clock,
+      capabilities: { supportsRemind: true, supportsFallbackOffer: false },
+    });
+    const registry = new InMemoryChannelRegistry([remindersOnly]);
+    const schedule = harness.engine.computeSchedule({
+      tasks: [synthTask({ endsAt: endsAtWindow() })],
+      preferences: synthPreferences({ quietHours: noQuietHours() }),
+      channels: registry,
+    });
+    if (!schedule.ok) {
+      throw new Error("expected computation to succeed");
+    }
+    expect(schedule.value.skipped).toEqual([]);
+    expect(schedule.value.reminders).toHaveLength(1);
+    expect(schedule.value.reminders[0]!.channelId).toBe("reminders-only");
+  });
+
+  it("a channel disabled by preference is skipped with an accounted reason while others proceed", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const extra = new InMemoryChannel({ id: "inapp-secondary", clock: harness.clock });
+    const registry = new InMemoryChannelRegistry([harness.channel, extra]);
+    const schedule = harness.engine.computeSchedule({
+      tasks: [synthTask({ endsAt: endsAtWindow() })],
+      preferences: synthPreferences({
+        quietHours: noQuietHours(),
+        channelPreferences: [{ channelId: "inapp-memory", enabled: false }],
+      }),
+      channels: registry,
+    });
+    if (!schedule.ok) {
+      throw new Error("expected computation to succeed");
+    }
+    expect(schedule.value.reminders).toHaveLength(1);
+    expect(schedule.value.reminders[0]!.channelId).toBe("inapp-secondary");
+    expect(schedule.value.skipped).toHaveLength(1);
+    expect(schedule.value.skipped[0]!.reason).toBe("preference-disabled");
+    expect(schedule.value.skipped[0]!.channelId).toBe("inapp-memory");
+  });
+});
+
+describe("B8 WebPushChannel — seam-only SYNTH double", () => {
+  const subscription: WebPushSubscriptionProvider = {
+    resolveSubscription: async () => ({ endpointToken: "SYNTH-ENDPOINT-TOKEN-9f8e2c1a" }),
+  };
+  const noSubscription: WebPushSubscriptionProvider = {
+    resolveSubscription: async () => undefined,
+  };
+
+  it("delivers through both typed operations with a deterministic SYNTH receipt", async () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const channel = new WebPushChannel({ subscriptionProvider: subscription, clock: harness.clock });
+    for (const delivery of [
+      await channel.sendReminder(synthRequest(remindPayload())),
+      await channel.sendFallbackOffer(synthRequest(remindPayload())),
+    ]) {
+      expect(delivery.status).toBe("delivered");
+      if (delivery.status === "delivered") {
+        expect(delivery.providerReceipt).toBe("synth:webpush:delivered");
+      }
+    }
+    expect(channel.kind).toBe("push");
+    expect(channel.capabilities).toEqual({ supportsRemind: true, supportsFallbackOffer: true });
+  });
+
+  it("a subscription lookup miss is a typed no-delivery-address failure — never a throw", async () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const channel = new WebPushChannel({ subscriptionProvider: noSubscription, clock: harness.clock });
+    const delivery = await channel.sendReminder(synthRequest(remindPayload()));
+    expect(delivery).toEqual({
+      status: "undelivered",
+      reason: "no-delivery-address",
+      detail: "synth-webpush-no-subscription",
+    });
+  });
+
+  it("the endpoint token never leaves the provider plane (engine outputs stay token-free)", async () => {
+    const epoch = NOON + 90 * MINUTE;
+    const pushClock = new DeterministicClock({ epochMs: epoch });
+    const harness = buildNotificationHarness({
+      epochMs: epoch,
+      channels: [new WebPushChannel({ subscriptionProvider: subscription, clock: pushClock })],
+    });
+    const outcome = await harness.engine.dispatchDue({
+      tasks: [synthTask({ endsAt: endsAtWindow() })],
+      preferences: synthPreferences({ quietHours: noQuietHours() }),
+      channels: harness.registry,
+    });
+    if (!outcome.ok) {
+      throw new Error("expected dispatch to succeed");
+    }
+    const dump = JSON.stringify(outcome.value) + JSON.stringify(harness.ledger.listAll());
+    expect(dump).not.toContain("SYNTH-ENDPOINT-TOKEN-9f8e2c1a");
+    expect(dump).toContain("synth:webpush:delivered");
+  });
+});
+
+describe("B8 EmailChannel — seam-only SYNTH double", () => {
+  const withAddress: EmailAddressProvider = {
+    resolveAddress: async () => ({ addressToken: "synth.patient@example.org" }),
+  };
+  const withoutAddress: EmailAddressProvider = {
+    resolveAddress: async () => undefined,
+  };
+
+  it("delivers through both typed operations with a deterministic SYNTH receipt", async () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const channel = new EmailChannel({ addressProvider: withAddress, clock: harness.clock });
+    for (const delivery of [
+      await channel.sendReminder(synthRequest(remindPayload())),
+      await channel.sendFallbackOffer(synthRequest(remindPayload())),
+    ]) {
+      expect(delivery.status).toBe("delivered");
+      if (delivery.status === "delivered") {
+        expect(delivery.providerReceipt).toBe("synth:email:delivered");
+      }
+    }
+    expect(channel.kind).toBe("email");
+  });
+
+  it("an address lookup miss is a typed no-delivery-address failure — never a throw", async () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const channel = new EmailChannel({ addressProvider: withoutAddress, clock: harness.clock });
+    const delivery = await channel.sendFallbackOffer(synthRequest(remindPayload()));
+    expect(delivery).toEqual({
+      status: "undelivered",
+      reason: "no-delivery-address",
+      detail: "synth-email-no-address",
+    });
+  });
+});
+
+describe("B8 channel registry", () => {
+  it("rejects duplicate channel ids and entries without ids", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const first = new InMemoryChannel({ id: "dup", clock: harness.clock });
+    const second = new InMemoryChannel({ id: "dup", clock: harness.clock });
+    expect(() => new InMemoryChannelRegistry([first, second])).toThrowError(NotificationEngineError);
+    const nameless = new InMemoryChannel({ id: "", clock: harness.clock });
+    expect(() => new InMemoryChannelRegistry([nameless])).toThrowError(NotificationEngineError);
+  });
+
+  it("preserves insertion order and resolves by id", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const first = new InMemoryChannel({ id: "alpha", clock: harness.clock });
+    const second = new InMemoryChannel({ id: "beta", clock: harness.clock });
+    const registry = new InMemoryChannelRegistry([first, second]);
+    expect(registry.all().map((channel) => channel.id)).toEqual(["alpha", "beta"]);
+    expect(registry.get("beta")).toBe(second);
+    expect(registry.get("ghost")).toBeUndefined();
+  });
+});
+
+describe("B8 delivery vocabulary guards", () => {
+  it("classifies failure reasons and delivery results", () => {
+    for (const reason of DELIVERY_FAILURE_REASONS) {
+      expect(isDeliveryFailureReason(reason)).toBe(true);
+    }
+    expect(isDeliveryFailureReason("provider-exploded")).toBe(false);
+    expect(isDeliveryFailureReason(undefined)).toBe(false);
+    expect(
+      isDeliveryResult({ status: "delivered", deliveredAt: new Date(0), providerReceipt: "synth:x" }),
+    ).toBe(true);
+    expect(isDeliveryResult({ status: "undelivered", reason: "rate-limited" })).toBe(true);
+    expect(isDeliveryResult({ status: "undelivered", reason: "made-up" })).toBe(false);
+    expect(isDeliveryResult({ status: "teleported" })).toBe(false);
+    expect(isDeliveryResult(null)).toBe(false);
+  });
+
+  it("payload clones are deep (dates and arrays are fresh copies)", () => {
+    const payload = remindPayload();
+    const clone = cloneReminderPayload(payload);
+    expect(clone).toEqual(payload);
+    expect(clone.dueAt).not.toBe(payload.dueAt);
+    expect(clone.dueAt.getTime()).toBe(payload.dueAt.getTime());
   });
 });

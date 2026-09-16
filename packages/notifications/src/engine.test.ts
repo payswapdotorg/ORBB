@@ -1,903 +1,430 @@
 import { describe, expect, it } from "vitest";
-import { DeterministicClock, DeterministicIdFactory } from "@orbb/testkit";
-import type { MeasurementTask, TaskId } from "@orbb/measurement";
-import { canonicalJsonStringify } from "./canonical.js";
-import { InMemoryChannel, InMemoryChannelRegistry, type ChannelRegistry } from "./channels.js";
-import { ReminderEngine } from "./engine.js";
-import { InMemorySendAttemptLedger } from "./ledger.js";
-import { InMemoryReminderLabelDirectory } from "./labels.js";
-import { InMemoryRecipientDirectory } from "./recipients.js";
+import { serializeReminderSchedule } from "./canonical.js";
+import type { EngineResult } from "./result.js";
 import {
-  hashReminderSchedule,
-  serializeReminderSchedule,
-} from "./serialization.js";
-import {
-  MS_PER_DAY,
-  MS_PER_HOUR,
-  SYNTH_METHOD_IDS,
-  SYNTH_PERSON_ID,
+  HOUR,
+  MINUTE,
   buildNotificationHarness,
-  harnessProfile,
-  quietHours,
-  reviveTasksFromCanonicalJson,
-  syntheticTask,
-  syntheticTaskId,
+  synthPersonId,
+  synthPreferences,
+  synthTask,
+  synthTaskId,
 } from "./testsupport.js";
+import { InMemoryChannel } from "./inmemory-channel.js";
+import {
+  InMemoryChannelRegistry,
+  type ChannelRegistry,
+  type NotificationChannel,
+} from "./channels.js";
+import { isReminderId } from "./identity.js";
+import type { ReminderError, ReminderSchedule } from "./engine.js";
+import type { MeasurementTask } from "@orbb/measurement";
+import type { QuietHoursSpec } from "./preferences.js";
 
-/** A window helper: [start, start + duration), sequence 0 by default. */
-function window(startMs: number, durationMs: number, sequence = 0) {
-  return { sequence, startsAt: new Date(startMs), endsAt: new Date(startMs + durationMs) };
+/** Noon UTC on Wednesday 2026-06-10 — outside the default quiet window. */
+const NOON = Date.UTC(2026, 5, 10, 12, 0, 0);
+
+/** Quiet hours disabled (pure window-math tests defer separately). */
+function noQuietHours(): QuietHoursSpec {
+  return { enabled: false, startLocalMinutes: 1320, endLocalMinutes: 420 };
 }
 
-describe("B8 reminder engine — schedule computation over real task snapshots", () => {
-  it("computes an upcoming-due REMIND reminder at endsAt minus the lead time", () => {
-    const harness = buildNotificationHarness();
-    const task = syntheticTask({ window: window(MS_PER_DAY, 2 * MS_PER_HOUR) });
-    const result = harness.engine.computeSchedule({
-      tasks: [task],
-      profile: harnessProfile({ quietHours: null }),
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    const { reminders, skippedChannels, computedAt } = result.value;
-    expect(computedAt.getTime()).toBe(0);
-    expect(skippedChannels).toEqual([]);
-    expect(reminders).toHaveLength(1);
-    const reminder = reminders[0];
-    if (reminder === undefined) {
-      throw new Error("expected one reminder");
-    }
-    expect(reminder.rung).toBe("REMIND");
-    expect(reminder.channel).toBe("inmem");
-    expect(reminder.taskId).toBe(syntheticTaskId(1));
-    // 1970-01-02T02:00:00Z window end minus the 60-minute default lead.
-    expect(reminder.scheduledAt.getTime()).toBe(MS_PER_DAY + MS_PER_HOUR);
-    expect(reminder.deferredFrom).toBeUndefined();
-    // Rung-1 payload: no fallback-offer key at all, no defer key at all.
-    expect("fallbackOffer" in reminder.payload).toBe(false);
-    expect("defer" in reminder.payload).toBe(false);
-    // Internal addressing field present (never projected into the payload).
-    expect(reminder.personId).toBe(SYNTH_PERSON_ID);
-    expect("personId" in reminder.payload).toBe(false);
-  });
-
-  it("clamps the upcoming nudge forward to the window start when the lead exceeds the window duration", () => {
-    const harness = buildNotificationHarness();
-    const task = syntheticTask({ window: window(MS_PER_DAY, 2 * MS_PER_HOUR) });
-    const result = harness.engine.computeSchedule({
-      tasks: [task],
-      profile: harnessProfile({ quietHours: null, leadTimeMs: 3 * MS_PER_HOUR }),
-    });
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    const reminder = result.value.reminders[0];
-    if (reminder === undefined) {
-      throw new Error("expected one reminder");
-    }
-    // 3h lead over a 2h window: fire clamps to the window start (1d).
-    expect(reminder.scheduledAt.getTime()).toBe(MS_PER_DAY);
-  });
-
-  it("computes a missed-window REMIND_WITH_FALLBACK_OFFER reminder at endsAt plus the grace", () => {
-    // Epoch 3h: the [1d, 1d+2h) window has NOT closed yet — use a past window.
-    const harness = buildNotificationHarness({ epochMs: 2 * MS_PER_HOUR });
-    const task = syntheticTask({ window: window(0, MS_PER_HOUR) });
-    const result = harness.engine.computeSchedule({
-      tasks: [task],
-      profile: harnessProfile({ quietHours: null }),
-    });
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    const { reminders } = result.value;
-    expect(reminders).toHaveLength(1);
-    const reminder = reminders[0];
-    if (reminder === undefined) {
-      throw new Error("expected one reminder");
-    }
-    expect(reminder.rung).toBe("REMIND_WITH_FALLBACK_OFFER");
-    // Window closed at 1h; default grace 1h => fires at 2h.
-    expect(reminder.scheduledAt.getTime()).toBe(2 * MS_PER_HOUR);
-    if (reminder.payload.rung !== "REMIND_WITH_FALLBACK_OFFER") {
-      throw new Error("expected fallback-offer payload");
-    }
-    // Journey #7: the offer carries the task's recorded fallback vocabulary
-    // as DATA — preferred first, fallback order after, labeled, no authority.
-    expect(reminder.payload.fallbackOffer.enforcementAuthority).toBe("none");
-    expect(reminder.payload.fallbackOffer.methods).toEqual([
-      {
-        methodId: SYNTH_METHOD_IDS.bpCuff,
-        methodLabel: "SYNTH-label-bp-cuff",
-        role: "preferred",
-      },
-      {
-        methodId: SYNTH_METHOD_IDS.bpManual,
-        methodLabel: "SYNTH-label-bp-manual",
-        role: "fallback",
-      },
-    ]);
-  });
-
-  it("silences completed tasks — completing a task ends the ladder (no punishment)", () => {
-    const harness = buildNotificationHarness({ epochMs: 2 * MS_PER_HOUR });
-    const task = syntheticTask({ state: "completed", window: window(0, MS_PER_HOUR) });
-    const result = harness.engine.computeSchedule({
-      tasks: [task],
-      profile: harnessProfile({ quietHours: null }),
-    });
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    expect(result.value.reminders).toEqual([]);
-    expect(result.value.skippedChannels).toEqual([]);
-  });
-
-  it("honors the master preference gate — remindersEnabled false yields an empty schedule", () => {
-    const harness = buildNotificationHarness();
-    const task = syntheticTask({ window: window(MS_PER_DAY, 2 * MS_PER_HOUR) });
-    const result = harness.engine.computeSchedule({
-      tasks: [task],
-      profile: harnessProfile({ remindersEnabled: false, channels: [] }),
-    });
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    expect(result.value.reminders).toEqual([]);
-  });
-
-  it("fans out across every enabled profile channel in profile order", () => {
-    const harness = buildNotificationHarness();
-    const task = syntheticTask({ window: window(MS_PER_DAY, 2 * MS_PER_HOUR) });
-    const result = harness.engine.computeSchedule({
-      tasks: [task],
-      profile: harnessProfile({ quietHours: null, channels: ["email-synth", "webpush-synth", "inmem"] }),
-    });
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    expect(result.value.reminders.map((reminder) => reminder.channel)).toEqual([
-      "email-synth",
-      "inmem",
-      "webpush-synth",
-    ]);
-    // One distinct deterministic id per channel (identity includes channel).
-    const ids = new Set(result.value.reminders.map((reminder) => reminder.id));
-    expect(ids.size).toBe(3);
-  });
-});
-
-describe("B8 reminder engine — due/missed boundary table (UTC day and week edges)", () => {
-  // Boundary instants: a UTC-day edge (1970-01-02T00:00Z) and a week edge
-  // (2024-01-07T00:00Z, a Sunday). The rung flips exactly at endsAt <= now.
-  const cases: readonly {
-    readonly name: string;
-    readonly nowMs: number;
-    readonly endsAtMs: number;
-    readonly expectedRung: "REMIND" | "REMIND_WITH_FALLBACK_OFFER" | undefined;
-  }[] = [
-    {
-      name: "endsAt exactly at now on a UTC day edge -> missed (offer rung)",
-      nowMs: MS_PER_DAY,
-      endsAtMs: MS_PER_DAY,
-      expectedRung: "REMIND_WITH_FALLBACK_OFFER",
-    },
-    {
-      name: "endsAt one millisecond after now on a UTC day edge -> upcoming (remind rung)",
-      nowMs: MS_PER_DAY,
-      endsAtMs: MS_PER_DAY + 1,
-      expectedRung: "REMIND",
-    },
-    {
-      name: "endsAt exactly at now on a week edge (Sunday 00:00 UTC) -> missed",
-      nowMs: Date.UTC(2024, 0, 7),
-      endsAtMs: Date.UTC(2024, 0, 7),
-      expectedRung: "REMIND_WITH_FALLBACK_OFFER",
-    },
-    {
-      name: "endsAt one millisecond after now on a week edge (Sunday 00:00 UTC) -> upcoming",
-      nowMs: Date.UTC(2024, 0, 7),
-      endsAtMs: Date.UTC(2024, 0, 7) + 1,
-      expectedRung: "REMIND",
-    },
-    {
-      name: "endsAt one millisecond before a week edge (Saturday 23:59:59.999) -> missed",
-      nowMs: Date.UTC(2024, 0, 7),
-      endsAtMs: Date.UTC(2024, 0, 7) - 1,
-      expectedRung: "REMIND_WITH_FALLBACK_OFFER",
-    },
-  ];
-
-  for (const testCase of cases) {
-    it(testCase.name, () => {
-      const harness = buildNotificationHarness({ epochMs: testCase.nowMs });
-      const task = syntheticTask({
-        window: {
-          sequence: 0,
-          startsAt: new Date(testCase.endsAtMs - MS_PER_HOUR),
-          endsAt: new Date(testCase.endsAtMs),
-        },
-      });
-      const result = harness.engine.computeSchedule({
-        tasks: [task],
-        profile: harnessProfile({ quietHours: null, leadTimeMs: 0, escalationGraceMs: 0 }),
-      });
-      if (!result.ok) {
-        throw new Error("expected scheduling to succeed");
-      }
-      expect(result.value.reminders.map((reminder) => reminder.rung)).toEqual(
-        testCase.expectedRung === undefined ? [] : [testCase.expectedRung],
-      );
-    });
+function scheduleOf(result: EngineResult<ReminderSchedule, ReminderError>): ReminderSchedule {
+  if (!result.ok) {
+    throw new Error("expected schedule computation to succeed");
   }
+  return result.value;
+}
 
-  it("escalates ONLY on the recorded conditions — one rung per task window per computation", () => {
-    const nowMs = 5 * MS_PER_HOUR;
-    const harness = buildNotificationHarness({ epochMs: nowMs });
-    const tasks: MeasurementTask[] = [
-      syntheticTask({ index: 1, window: window(6 * MS_PER_HOUR, MS_PER_HOUR) }), // future window
-      syntheticTask({ index: 2, window: window(MS_PER_HOUR, MS_PER_HOUR) }), // missed window
-    ];
-    const result = harness.engine.computeSchedule({
-      tasks,
-      profile: harnessProfile({ quietHours: null }),
-    });
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    const rungsByTask = new Map<string, string[]>();
-    for (const reminder of result.value.reminders) {
-      const list = rungsByTask.get(reminder.taskId) ?? [];
-      list.push(reminder.rung);
-      rungsByTask.set(reminder.taskId, list);
-    }
-    // Future-window task: exactly one REMIND, never the offer rung.
-    expect(rungsByTask.get(syntheticTaskId(1))).toEqual(["REMIND"]);
-    // Missed-window task: exactly one offer, never the plain remind rung.
-    expect(rungsByTask.get(syntheticTaskId(2))).toEqual(["REMIND_WITH_FALLBACK_OFFER"]);
-  });
-});
+const endsAt = new Date(NOON + 2 * HOUR);
 
-describe("B8 reminder engine — determinism (twice, and across serialized re-instantiation)", () => {
-  const fixtureTasks = (): MeasurementTask[] => [
-    syntheticTask({ index: 1, window: window(MS_PER_DAY, 2 * MS_PER_HOUR) }),
-    syntheticTask({ index: 2, metricId: "SYNTH-metric-step-count", window: window(2 * MS_PER_DAY, MS_PER_HOUR) }),
-    syntheticTask({ index: 3, state: "completed", window: window(0, MS_PER_HOUR) }),
-  ];
-
-  it("computing twice over the same inputs yields byte-identical schedules", () => {
-    const harness = buildNotificationHarness();
-    const profile = harnessProfile({ quietHours: null });
-    const first = harness.engine.computeSchedule({ tasks: fixtureTasks(), profile });
-    const second = harness.engine.computeSchedule({ tasks: fixtureTasks(), profile });
-    if (!first.ok || !second.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    expect(first.value).toEqual(second.value);
-    expect(serializeReminderSchedule(first.value)).toBe(serializeReminderSchedule(second.value));
-    expect(hashReminderSchedule(first.value)).toBe(hashReminderSchedule(second.value));
-  });
-
-  it("is invariant to input task order (canonical schedule ordering)", () => {
-    const harness = buildNotificationHarness();
-    const profile = harnessProfile({ quietHours: null });
-    const forward = harness.engine.computeSchedule({ tasks: fixtureTasks(), profile });
-    const reversed = harness.engine.computeSchedule({
-      tasks: [...fixtureTasks()].reverse(),
-      profile,
-    });
-    if (!forward.ok || !reversed.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    expect(serializeReminderSchedule(reversed.value)).toBe(serializeReminderSchedule(forward.value));
-  });
-
-  it("reproduces the identical schedule across a serialized re-instantiation", () => {
-    const harnessA = buildNotificationHarness();
-    const profile = harnessProfile({ quietHours: null });
-    const first = harnessA.engine.computeSchedule({ tasks: fixtureTasks(), profile });
-    if (!first.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    // Serialize the inputs (Dates become epoch-ms integers), revive them,
-    // rebuild the whole engine over fresh doubles, recompute.
-    const revived = reviveTasksFromCanonicalJson(canonicalJsonStringify(fixtureTasks()));
-    const harnessB = buildNotificationHarness();
-    const second = harnessB.engine.computeSchedule({ tasks: revived, profile });
-    if (!second.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    expect(serializeReminderSchedule(second.value)).toBe(serializeReminderSchedule(first.value));
-    expect(hashReminderSchedule(second.value)).toBe(hashReminderSchedule(first.value));
-    // The canonical serialization round-trips stably on its own, too.
-    expect(canonicalJsonStringify(JSON.parse(serializeReminderSchedule(first.value)))).toBe(
-      serializeReminderSchedule(first.value),
-    );
-  });
-
-  it("derives reminder ids that satisfy the lane-local grammar", async () => {
-    const { isReminderId } = await import("./ids.js");
-    const harness = buildNotificationHarness();
-    const result = harness.engine.computeSchedule({
-      tasks: [syntheticTask({ window: window(MS_PER_DAY, 2 * MS_PER_HOUR) })],
-      profile: harnessProfile({ quietHours: null }),
-    });
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    for (const reminder of result.value.reminders) {
-      expect(isReminderId(reminder.id)).toBe(true);
-    }
-  });
-});
-
-describe("B8 reminder engine — quiet hours: defer to the edge, never drop", () => {
-  it("defers an overnight fire instant to the 07:00 edge and records the deferral on the payload", () => {
-    const harness = buildNotificationHarness();
-    // Window [1d, 1d+2h): fire = 1d+1h = Friday 01:00 local — inside the
-    // recorded default quiet hours 22:00–07:00.
-    const task = syntheticTask({ window: window(MS_PER_DAY, 2 * MS_PER_HOUR) });
-    const result = harness.engine.computeSchedule({ tasks: [task], profile: harnessProfile() });
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    const { reminders } = result.value;
-    // DEFER, NOT DROP: the reminder still exists, exactly one.
-    expect(reminders).toHaveLength(1);
-    const reminder = reminders[0];
-    if (reminder === undefined) {
-      throw new Error("expected one reminder");
-    }
-    expect(reminder.scheduledAt.getTime()).toBe(MS_PER_DAY + 7 * MS_PER_HOUR);
-    expect(reminder.deferredFrom?.getTime()).toBe(MS_PER_DAY + MS_PER_HOUR);
-    expect(reminder.payload.defer).toEqual({
-      from: new Date(MS_PER_DAY + MS_PER_HOUR),
-      reason: "quiet-hours",
-    });
-  });
-
-  it("does not dispatch a deferred reminder before the edge, then dispatches at the edge", async () => {
-    // Custom non-wrapping quiet hours 02:00–05:00 so a rung-1 reminder can
-    // still be inside its window at the deferral edge.
-    const harness = buildNotificationHarness({ epochMs: 0 });
-    // Window [90m, 330m): fire = 330m - 60m = 270m = 04:30 — quiet.
-    const task = syntheticTask({ window: window(90 * 60_000, 240 * 60_000) });
-    const profile = harnessProfile({
-      quietHours: quietHours({ startMinuteOfDay: 120, endMinuteOfDay: 300 }),
-    });
-    const before = await harness.engine.dispatchPending({ tasks: [task], profile });
-    if (!before.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    // Deferred to the 05:00 edge: not yet due at epoch 0 — nothing sent,
-    // nothing dropped.
-    expect(before.value.dispatched).toEqual([]);
-    expect(before.value.notYetDue).toHaveLength(1);
-    expect(before.value.due).toBe(0);
-
-    harness.clock.advanceTo(300 * 60_000);
-    const atEdge = await harness.engine.dispatchPending({ tasks: [task], profile });
-    if (!atEdge.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    expect(atEdge.value.due).toBe(1);
-    expect(atEdge.value.dispatched).toHaveLength(1);
-    const attempt = atEdge.value.dispatched[0];
-    if (attempt === undefined) {
-      throw new Error("expected one attempt");
-    }
-    expect(attempt.outcome.status).toBe("sent");
-    expect(attempt.rung).toBe("REMIND");
-  });
-
-  it("an overnight-missed task's fallback-offer reminder defers to the morning edge and fires there", async () => {
-    const harness = buildNotificationHarness({ epochMs: 0 });
-    // Window [22:30, 23:30) on day 0: missed the same night; offer fires
-    // at 23:30 + 1h grace = day-1 00:30 — quiet — deferred to day-1 07:00.
-    const task = syntheticTask({
-      window: window(22.5 * MS_PER_HOUR, MS_PER_HOUR),
-    });
-    const profile = harnessProfile();
-    harness.clock.advanceTo(MS_PER_DAY + 7 * MS_PER_HOUR);
-    const result = await harness.engine.dispatchPending({ tasks: [task], profile });
-    if (!result.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    expect(result.value.dispatched).toHaveLength(1);
-    const attempt = result.value.dispatched[0];
-    if (attempt === undefined) {
-      throw new Error("expected one attempt");
-    }
-    expect(attempt.rung).toBe("REMIND_WITH_FALLBACK_OFFER");
-    expect(attempt.outcome.status).toBe("sent");
-  });
-
-  it("a profile that disables quiet hours never defers", () => {
-    const harness = buildNotificationHarness();
-    const task = syntheticTask({ window: window(MS_PER_DAY, 2 * MS_PER_HOUR) });
-    const result = harness.engine.computeSchedule({
-      tasks: [task],
-      profile: harnessProfile({ quietHours: null }),
-    });
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    const reminder = result.value.reminders[0];
-    if (reminder === undefined) {
-      throw new Error("expected one reminder");
-    }
-    expect(reminder.scheduledAt.getTime()).toBe(MS_PER_DAY + MS_PER_HOUR);
-    expect(reminder.deferredFrom).toBeUndefined();
-    expect("defer" in reminder.payload).toBe(false);
-  });
-});
-
-describe("B8 reminder engine — capability-gated channels are skipped with an accounted reason", () => {
-  function engineOver(channels: readonly InMemoryChannel[], epochMs = 0) {
-    const clock = new DeterministicClock({ epochMs });
-    const registry = new InMemoryChannelRegistry(channels);
-    const engine = new ReminderEngine({
-      clock,
-      ids: new DeterministicIdFactory({ seed: "caps" }),
-      channels: registry,
-      ledger: new InMemorySendAttemptLedger(),
-      recipients: new InMemoryRecipientDirectory(),
-      labels: new InMemoryReminderLabelDirectory({}),
-    });
-    return { clock, registry, engine };
-  }
-
-  it("skips a rung-2 reminder on a channel without canCarryFallbackOffer, with the accounted reason", () => {
-    const basic = new InMemoryChannel({
-      id: "basic",
-      clock: new DeterministicClock({ epochMs: 2 * MS_PER_HOUR }),
-      capabilities: { canRemind: true, canCarryFallbackOffer: false },
-    });
-    const full = new InMemoryChannel({
-      id: "full",
-      clock: new DeterministicClock({ epochMs: 2 * MS_PER_HOUR }),
-    });
-    const { engine } = engineOver([basic, full], 2 * MS_PER_HOUR);
-    const task = syntheticTask({ window: window(0, MS_PER_HOUR) }); // missed at epoch 2h
-    const result = engine.computeSchedule({
-      tasks: [task],
-      profile: harnessProfile({ quietHours: null, channels: ["basic", "full"] }),
-    });
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    // Only the full-capability channel carries the offer.
-    expect(result.value.reminders.map((reminder) => reminder.channel)).toEqual(["full"]);
-    expect(result.value.skippedChannels).toEqual([
-      {
-        taskId: syntheticTaskId(1),
-        rung: "REMIND_WITH_FALLBACK_OFFER",
-        channel: "basic",
-        reason: { kind: "channel-lacks-capability", capability: "canCarryFallbackOffer" },
-      },
-    ]);
-  });
-
-  it("still delivers rung-1 reminders on a channel that only lacks the fallback-offer capability", () => {
-    const basic = new InMemoryChannel({
-      id: "basic",
-      clock: new DeterministicClock({ epochMs: 0 }),
-      capabilities: { canRemind: true, canCarryFallbackOffer: false },
-    });
-    const { engine } = engineOver([basic]);
-    const task = syntheticTask({ window: window(MS_PER_DAY, 2 * MS_PER_HOUR) });
-    const result = engine.computeSchedule({
-      tasks: [task],
-      profile: harnessProfile({ quietHours: null, channels: ["basic"] }),
-    });
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    expect(result.value.reminders.map((reminder) => reminder.channel)).toEqual(["basic"]);
-    expect(result.value.skippedChannels).toEqual([]);
-  });
-
-  it("skips both rungs on a channel without canRemind", () => {
-    const muted = new InMemoryChannel({
-      id: "muted",
-      clock: new DeterministicClock({ epochMs: 0 }),
-      capabilities: { canRemind: false, canCarryFallbackOffer: true },
-    });
-    const { engine } = engineOver([muted]);
-    const task = syntheticTask({ window: window(MS_PER_DAY, 2 * MS_PER_HOUR) });
-    const result = engine.computeSchedule({
-      tasks: [task],
-      profile: harnessProfile({ quietHours: null, channels: ["muted"] }),
-    });
-    if (!result.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    expect(result.value.reminders).toEqual([]);
-    expect(result.value.skippedChannels).toEqual([
-      {
-        taskId: syntheticTaskId(1),
-        rung: "REMIND",
-        channel: "muted",
-        reason: { kind: "channel-lacks-capability", capability: "canRemind" },
-      },
-    ]);
-  });
-});
-
-describe("B8 reminder engine — idempotent dispatch (recompute adds nothing)", () => {
-  function dueRungOneHarness() {
-    // Epoch 1d+50m: window [1d, 1d+2h) is open (endsAt 1d+2h > now) and the
-    // fire instant 1d+1h is already due.
-    return buildNotificationHarness({ epochMs: MS_PER_DAY + 70 * 60_000 });
-  }
-  const openWindowTask = (): MeasurementTask =>
-    syntheticTask({ window: window(MS_PER_DAY, 2 * MS_PER_HOUR) });
-
-  it("dispatches each due reminder exactly once and suppresses re-dispatch via the ledger", async () => {
-    const harness = dueRungOneHarness();
-    const task = openWindowTask();
-    const profile = harnessProfile({ quietHours: null });
-    const first = await harness.engine.dispatchPending({ tasks: [task], profile });
-    if (!first.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    expect(first.value.due).toBe(1);
-    expect(first.value.alreadyDispatched).toEqual([]);
-    expect(first.value.dispatched).toHaveLength(1);
-    const attempt = first.value.dispatched[0];
-    if (attempt === undefined) {
-      throw new Error("expected one attempt");
-    }
-    expect(attempt.outcome.status).toBe("sent");
-    expect(attempt.channel).toBe("inmem");
-    expect(harness.inmem.recorded).toHaveLength(1);
-    const ledgerRows = await harness.ledger.listAll();
-    expect(ledgerRows).toHaveLength(1);
-
-    // Recompute + re-dispatch at the SAME clock instant: adds nothing.
-    const second = await harness.engine.dispatchPending({ tasks: [task], profile });
-    if (!second.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    expect(second.value.due).toBe(1);
-    expect(second.value.dispatched).toEqual([]);
-    expect(second.value.alreadyDispatched).toEqual([attempt.reminderId]);
-    expect(await harness.ledger.listAll()).toHaveLength(1);
-    expect(harness.inmem.recorded).toHaveLength(1);
-
-    // The schedule itself is duplicate-free across recomputes.
-    const scheduleA = harness.engine.computeSchedule({ tasks: [task], profile });
-    const scheduleB = harness.engine.computeSchedule({ tasks: [task], profile });
-    if (!scheduleA.ok || !scheduleB.ok) {
-      throw new Error("expected scheduling to succeed");
-    }
-    expect(scheduleA.value.reminders.map((reminder) => reminder.id)).toEqual(
-      scheduleB.value.reminders.map((reminder) => reminder.id),
-    );
-  });
-
-  it("fans dispatch out per channel with one ledger row per reminder identity", async () => {
-    const harness = dueRungOneHarness();
-    const task = openWindowTask();
-    const profile = harnessProfile({ quietHours: null, channels: ["webpush-synth", "email-synth"] });
-    const result = await harness.engine.dispatchPending({ tasks: [task], profile });
-    if (!result.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    expect(result.value.dispatched.map((attempt) => attempt.channel)).toEqual([
-      "email-synth",
-      "webpush-synth",
-    ]);
-    const rows = await harness.ledger.listAll();
-    expect(rows).toHaveLength(2);
-    expect(new Set(rows.map((row) => row.reminderId)).size).toBe(2);
-  });
-
-  it("records future-scheduled reminders as not yet due (nothing sent, nothing dropped)", async () => {
-    const harness = buildNotificationHarness();
-    const task = openWindowTask();
-    const result = await harness.engine.dispatchPending({
-      tasks: [task],
-      profile: harnessProfile({ quietHours: null }),
-    });
-    if (!result.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    expect(result.value.due).toBe(0);
-    expect(result.value.dispatched).toEqual([]);
-    expect(result.value.notYetDue).toHaveLength(1);
-    expect(await harness.ledger.listAll()).toEqual([]);
-  });
-});
-
-describe("B8 reminder engine — fail-closed dispatch (recorded outcomes, never crashes)", () => {
-  function engineWith(
-    channels: readonly InMemoryChannel[],
-    options?: { readonly registerRecipient?: boolean },
-  ) {
-    const clock = new DeterministicClock({ epochMs: MS_PER_DAY + 70 * 60_000 });
-    const registry = new InMemoryChannelRegistry(channels);
-    const recipients = new InMemoryRecipientDirectory();
-    if (options?.registerRecipient !== false) {
-      recipients.register(SYNTH_PERSON_ID, "SYNTH-recipient-00000001");
-    }
-    const ledger = new InMemorySendAttemptLedger();
-    const engine = new ReminderEngine({
-      clock,
-      ids: new DeterministicIdFactory({ seed: "failclosed" }),
-      channels: registry,
-      ledger,
-      recipients,
-      labels: new InMemoryReminderLabelDirectory({}),
-    });
-    return { clock, registry, ledger, engine };
-  }
-  const openWindowTask = (): MeasurementTask =>
-    syntheticTask({ window: window(MS_PER_DAY, 2 * MS_PER_HOUR) });
-
-  it("converts a throwing channel into a recorded channel-transport-error; the engine result stays ok", async () => {
-    const throwing = new InMemoryChannel({
-      id: "bad",
-      clock: new DeterministicClock({ epochMs: MS_PER_DAY + 70 * 60_000 }),
-      fault: { mode: "throw" },
-    });
-    const { engine, ledger } = engineWith([throwing]);
-    const result = await engine.dispatchPending({
-      tasks: [openWindowTask()],
-      profile: harnessProfile({ quietHours: null, channels: ["bad"] }),
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    expect(result.value.dispatched).toHaveLength(1);
-    const attempt = result.value.dispatched[0];
-    if (attempt === undefined) {
-      throw new Error("expected one attempt");
-    }
-    expect(attempt.outcome).toEqual({
-      status: "undeliverable",
-      reason: { kind: "channel-transport-error" },
-    });
-    // The failure is RECORDED (never a silent drop).
-    expect(await ledger.listAll()).toHaveLength(1);
-  });
-
-  it("records an explicit undeliverable reason from the channel contract", async () => {
-    const rejecting = new InMemoryChannel({
-      id: "rejecting",
-      clock: new DeterministicClock({ epochMs: MS_PER_DAY + 70 * 60_000 }),
-      fault: { mode: "undeliverable", reason: { kind: "payload-rejected" } },
-    });
-    const { engine } = engineWith([rejecting]);
-    const result = await engine.dispatchPending({
-      tasks: [openWindowTask()],
-      profile: harnessProfile({ quietHours: null, channels: ["rejecting"] }),
-    });
-    if (!result.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    expect(result.value.dispatched[0]?.outcome).toEqual({
-      status: "undeliverable",
-      reason: { kind: "payload-rejected" },
-    });
-  });
-
-  it("records unknown-recipient as an undeliverable outcome when the directory misses", async () => {
-    const good = new InMemoryChannel({
-      id: "good",
-      clock: new DeterministicClock({ epochMs: MS_PER_DAY + 70 * 60_000 }),
-    });
-    const { engine } = engineWith([good], { registerRecipient: false });
-    const result = await engine.dispatchPending({
-      tasks: [openWindowTask()],
-      profile: harnessProfile({ quietHours: null, channels: ["good"] }),
-    });
-    if (!result.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    expect(result.value.dispatched[0]?.outcome).toEqual({
-      status: "undeliverable",
-      reason: { kind: "unknown-recipient" },
-    });
-  });
-
-  it("continues past a failing channel — other channels' reminders still dispatch", async () => {
-    const bad = new InMemoryChannel({
-      id: "bad",
-      clock: new DeterministicClock({ epochMs: MS_PER_DAY + 70 * 60_000 }),
-      fault: { mode: "throw" },
-    });
-    const good = new InMemoryChannel({
-      id: "good",
-      clock: new DeterministicClock({ epochMs: MS_PER_DAY + 70 * 60_000 }),
-    });
-    const { engine } = engineWith([bad, good]);
-    const result = await engine.dispatchPending({
-      tasks: [openWindowTask()],
-      profile: harnessProfile({ quietHours: null, channels: ["bad", "good"] }),
-    });
-    if (!result.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    expect(result.value.dispatched.map((attempt) => attempt.channel)).toEqual(["bad", "good"]);
-    expect(result.value.dispatched.map((attempt) => attempt.outcome.status)).toEqual([
-      "undeliverable",
-      "sent",
-    ]);
-  });
-
-  it("records channel-disabled when the registry loses a channel between schedule and dispatch", async () => {
-    const clock = new DeterministicClock({ epochMs: MS_PER_DAY + 70 * 60_000 });
-    const channel = new InMemoryChannel({ id: "vanishing", clock });
-    // A flippable registry double: deterministic, closure-state controlled.
-    const disabled = new Set<string>();
-    const flippableRegistry: ChannelRegistry = {
-      resolve: (channelId) =>
-        disabled.has(channelId) ? undefined : channel.id === channelId ? channel : undefined,
-      list: () => (disabled.size > 0 ? [] : [channel]),
-    };
-    // A ledger double that flips the registry DURING the dispatch loop
-    // (the only window where schedule-time validation has already passed
-    // but the per-reminder channel resolution has not run yet).
-    const midDispatchLedger = {
-      record: () => Promise.resolve(),
-      findByReminderId: () => {
-        disabled.add("vanishing");
-        return Promise.resolve(undefined);
-      },
-      listAll: () => Promise.resolve([]),
-    };
-    const engine = new ReminderEngine({
-      clock,
-      ids: new DeterministicIdFactory({ seed: "flip" }),
-      channels: flippableRegistry,
-      ledger: midDispatchLedger,
-      recipients: (() => {
-        const recipients = new InMemoryRecipientDirectory();
-        recipients.register(SYNTH_PERSON_ID, "SYNTH-recipient-00000001");
-        return recipients;
-      })(),
-      labels: new InMemoryReminderLabelDirectory({}),
-    });
-    // Schedule-time: the channel is still registered (validation passes).
-    const schedule = engine.computeSchedule({
-      tasks: [openWindowTask()],
-      profile: harnessProfile({ quietHours: null, channels: ["vanishing"] }),
-    });
-    expect(schedule.ok).toBe(true);
-    // Dispatch-time: the registry lost the channel mid-dispatch — the
-    // engine records channel-disabled instead of crashing.
-    const result = await engine.dispatchPending({
-      tasks: [openWindowTask()],
-      profile: harnessProfile({ quietHours: null, channels: ["vanishing"] }),
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    expect(result.value.dispatched[0]?.outcome).toEqual({
-      status: "undeliverable",
-      reason: { kind: "channel-disabled" },
-    });
-  });
-
-  it("surfaces ledger unavailability as a typed rejection, never a crash", async () => {
-    const good = new InMemoryChannel({
-      id: "good",
-      clock: new DeterministicClock({ epochMs: MS_PER_DAY + 70 * 60_000 }),
-    });
-    const failingLedger = {
-      record: () => Promise.resolve(),
-      findByReminderId: () => Promise.reject(new Error("SYNTH ledger down")),
-      listAll: () => Promise.resolve([]),
-    };
-    const engineWithBadLedger = new ReminderEngine({
-      clock: new DeterministicClock({ epochMs: MS_PER_DAY + 70 * 60_000 }),
-      ids: new DeterministicIdFactory({ seed: "ledgerdown" }),
-      channels: new InMemoryChannelRegistry([good]),
-      ledger: failingLedger,
-      recipients: new InMemoryRecipientDirectory(),
-      labels: new InMemoryReminderLabelDirectory({}),
-    });
-    const result = await engineWithBadLedger.dispatchPending({
-      tasks: [openWindowTask()],
-      profile: harnessProfile({ quietHours: null, channels: ["good"] }),
-    });
-    expect(result).toEqual({ ok: false, error: { kind: "ledger-unavailable" } });
-  });
-
-  it("treats a throwing recipient directory as an unknown-recipient outcome (fail-closed)", async () => {
-    const good = new InMemoryChannel({
-      id: "good",
-      clock: new DeterministicClock({ epochMs: MS_PER_DAY + 70 * 60_000 }),
-    });
-    const clock = new DeterministicClock({ epochMs: MS_PER_DAY + 70 * 60_000 });
-    const engine = new ReminderEngine({
-      clock,
-      ids: new DeterministicIdFactory({ seed: "dirthrow" }),
-      channels: new InMemoryChannelRegistry([good]),
-      ledger: new InMemorySendAttemptLedger(),
-      recipients: {
-        resolve: () => Promise.reject(new Error("SYNTH directory down")),
-      },
-      labels: new InMemoryReminderLabelDirectory({}),
-    });
-    const result = await engine.dispatchPending({
-      tasks: [openWindowTask()],
-      profile: harnessProfile({ quietHours: null, channels: ["good"] }),
-    });
-    if (!result.ok) {
-      throw new Error("expected dispatch to succeed");
-    }
-    expect(result.value.dispatched[0]?.outcome).toEqual({
-      status: "undeliverable",
-      reason: { kind: "unknown-recipient" },
-    });
-  });
-});
-
-describe("B8 reminder engine — typed input validation rejections", () => {
-  const validTask = (): MeasurementTask =>
-    syntheticTask({ window: window(MS_PER_DAY, 2 * MS_PER_HOUR) });
-
-  it("rejects structurally invalid task snapshots with the task index", () => {
-    const harness = buildNotificationHarness();
-    const badId = { ...validTask(), id: "task_bad" as TaskId };
-    const badWindow = { ...validTask(), window: window(MS_PER_DAY, 0) };
-    const first = harness.engine.computeSchedule({
-      tasks: [badId, validTask()],
-      profile: harnessProfile({ quietHours: null }),
-    });
-    expect(first).toEqual({ ok: false, error: { kind: "invalid-task", taskIndex: 0 } });
-    const second = harness.engine.computeSchedule({
-      tasks: [validTask(), badWindow],
-      profile: harnessProfile({ quietHours: null }),
-    });
-    expect(second).toEqual({ ok: false, error: { kind: "invalid-task", taskIndex: 1 } });
-  });
-
-  it("rejects duplicate task ids with the second task's index", () => {
-    const harness = buildNotificationHarness();
-    const result = harness.engine.computeSchedule({
-      tasks: [validTask(), validTask()],
-      profile: harnessProfile({ quietHours: null }),
-    });
-    expect(result).toEqual({ ok: false, error: { kind: "duplicate-task", taskIndex: 1 } });
-  });
-
-  it("rejects invalid preference profiles with a structural field pointer", () => {
-    const harness = buildNotificationHarness();
-    const degenerateQuietHours = harnessProfile({
-      quietHours: quietHours({ startMinuteOfDay: 22 * 60, endMinuteOfDay: 22 * 60 }),
-    });
-    expect(
-      harness.engine.computeSchedule({ tasks: [validTask()], profile: degenerateQuietHours }),
-    ).toEqual({ ok: false, error: { kind: "invalid-preference", field: "quietHours" } });
-    expect(
+describe("B8 schedule computation — upcoming-due rung", () => {
+  it("schedules one REMIND reminder per eligible channel, lead minutes before the due instant", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const extra = new InMemoryChannel({ id: "inapp-secondary", clock: harness.clock });
+    const registry = new InMemoryChannelRegistry([harness.channel, extra]);
+    const endsAt = new Date(NOON + 2 * HOUR);
+    const task = synthTask({ endsAt });
+    const schedule = scheduleOf(
       harness.engine.computeSchedule({
-        tasks: [validTask()],
-        profile: harnessProfile({ channels: [] }),
+        tasks: [task],
+        preferences: synthPreferences({ quietHours: noQuietHours() }),
+        channels: registry,
       }),
-    ).toEqual({ ok: false, error: { kind: "invalid-preference", field: "channels" } });
+    );
+    expect(schedule.reminders).toHaveLength(2);
+    expect(schedule.skipped).toEqual([]);
+    for (const reminder of schedule.reminders) {
+      expect(isReminderId(reminder.id)).toBe(true);
+      expect(reminder.rung).toBe("REMIND");
+      expect(reminder.reason).toBe("upcoming-due");
+      expect(reminder.taskId).toBe(task.id);
+      expect(reminder.metricId).toBe(task.metricId);
+      expect(reminder.windowSequence).toBe(0);
+      expect(reminder.dueAt.getTime()).toBe(endsAt.getTime());
+      expect(reminder.nominalSendAt.getTime()).toBe(endsAt.getTime() - 60 * MINUTE);
+      expect(reminder.sendAt.getTime()).toBe(reminder.nominalSendAt.getTime());
+      expect(reminder.deferredByQuietHours).toBe(false);
+      expect(reminder.payload.kind).toBe("REMIND");
+      expect(reminder.payload.reason).toBe("upcoming-due");
+      expect(reminder.payload.taskId).toBe(task.id);
+      expect(reminder.payload.windowSequence).toBe(0);
+      expect(reminder.payload.dueAt.getTime()).toBe(endsAt.getTime());
+    }
+    const channelIds = schedule.reminders.map((reminder) => reminder.channelId).sort();
+    expect(channelIds).toEqual(["inapp-memory", "inapp-secondary"]);
+    // Per-channel identity: same (task, window, rung, day), different channel => different ids.
+    expect(schedule.reminders[0]!.id).not.toBe(schedule.reminders[1]!.id);
   });
 
-  it("rejects profiles referencing unregistered channels with the channel index", () => {
-    const harness = buildNotificationHarness();
-    const result = harness.engine.computeSchedule({
-      tasks: [validTask()],
-      profile: harnessProfile({ quietHours: null, channels: ["inmem", "ghost"] }),
+  it("a computation inside the lead window yields an immediately dispatchable (late) reminder", async () => {
+    const endsAt = new Date(NOON + 2 * HOUR);
+    const harness = buildNotificationHarness({ epochMs: NOON + 90 * MINUTE });
+    const task = synthTask({ endsAt });
+    const outcome = await harness.engine.dispatchDue({
+      tasks: [task],
+      preferences: synthPreferences({ quietHours: noQuietHours() }),
+      channels: harness.registry,
     });
-    expect(result).toEqual({ ok: false, error: { kind: "unknown-channel", channelIndex: 1 } });
+    if (!outcome.ok) {
+      throw new Error("expected dispatch to succeed");
+    }
+    expect(outcome.value.dispatched).toHaveLength(1);
+    expect(outcome.value.dispatched[0]!.reminder.rung).toBe("REMIND");
+    expect(outcome.value.pending).toEqual([]);
   });
 
-  it("never mutates the caller's task snapshots", () => {
-    const harness = buildNotificationHarness();
-    const task = validTask();
-    const snapshot = canonicalJsonStringify(task);
-    harness.engine.computeSchedule({ tasks: [task], profile: harnessProfile({ quietHours: null }) });
-    expect(canonicalJsonStringify(task)).toBe(snapshot);
+  it("completed tasks produce no reminders and no accounted skips", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const task = synthTask({ endsAt: new Date(NOON + 2 * HOUR), state: "completed" });
+    const schedule = scheduleOf(
+      harness.engine.computeSchedule({
+        tasks: [task],
+        preferences: synthPreferences({ quietHours: noQuietHours() }),
+        channels: harness.registry,
+      }),
+    );
+    expect(schedule.reminders).toEqual([]);
+    expect(schedule.skipped).toEqual([]);
+  });
+
+  it("the master preference gate disables every reminder", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const task = synthTask({ endsAt: new Date(NOON + 2 * HOUR) });
+    const schedule = scheduleOf(
+      harness.engine.computeSchedule({
+        tasks: [task],
+        preferences: synthPreferences({ remindersEnabled: false, quietHours: noQuietHours() }),
+        channels: harness.registry,
+      }),
+    );
+    expect(schedule.reminders).toEqual([]);
+    expect(schedule.skipped).toEqual([]);
+  });
+});
+
+describe("B8 schedule computation — window boundary math (table-driven)", () => {
+  const endsAtMs = NOON + 2 * HOUR;
+
+  it.each([
+    { label: "one millisecond before the due instant is still upcoming", nowOffsetMs: -1, rung: "REMIND", reason: "upcoming-due" },
+    { label: "exactly at the due instant the half-open window is closed (missed)", nowOffsetMs: 0, rung: "REMIND_WITH_FALLBACK_OFFER", reason: "missed-window" },
+    { label: "well after the due instant is missed", nowOffsetMs: 45 * MINUTE, rung: "REMIND_WITH_FALLBACK_OFFER", reason: "missed-window" },
+  ])("$label", ({ nowOffsetMs, rung, reason }) => {
+    const harness = buildNotificationHarness({ epochMs: endsAtMs + nowOffsetMs });
+    const task = synthTask({ endsAt: new Date(endsAtMs) });
+    const schedule = scheduleOf(
+      harness.engine.computeSchedule({
+        tasks: [task],
+        preferences: synthPreferences({ quietHours: noQuietHours() }),
+        channels: harness.registry,
+      }),
+    );
+    expect(schedule.reminders).toHaveLength(1);
+    const reminder = schedule.reminders[0]!;
+    expect(reminder.rung).toBe(rung);
+    expect(reminder.reason).toBe(reason);
+    if (rung === "REMIND") {
+      expect(reminder.nominalSendAt.getTime()).toBe(endsAtMs - 60 * MINUTE);
+    } else {
+      // Escalation fires escalationDelayMinutes (default 30) after the edge.
+      expect(reminder.nominalSendAt.getTime()).toBe(endsAtMs + 30 * MINUTE);
+    }
+  });
+
+  it("a week of daily windows escalates each missed one at its own edge", () => {
+    // Seven daily windows anchored at NOON; compute far after all of them.
+    const farNow = NOON + 8 * 24 * HOUR;
+    const harness = buildNotificationHarness({ epochMs: farNow });
+    const tasks = Array.from({ length: 7 }, (_, index) =>
+      synthTask({
+        id: synthTaskId(index + 1),
+        sequence: index,
+        startsAt: new Date(NOON + index * 24 * HOUR),
+        endsAt: new Date(NOON + index * 24 * HOUR + 2 * HOUR),
+      }),
+    );
+    const schedule = scheduleOf(
+      harness.engine.computeSchedule({
+        tasks,
+        preferences: synthPreferences({ quietHours: noQuietHours() }),
+        channels: harness.registry,
+      }),
+    );
+    expect(schedule.reminders).toHaveLength(7);
+    // Ordering is by task id (deterministic hash order), so assert per
+    // window sequence rather than by list position.
+    const bySequence = new Map<number, (typeof schedule.reminders)[number]>();
+    for (const reminder of schedule.reminders) {
+      bySequence.set(reminder.windowSequence, reminder);
+    }
+    expect(bySequence.size).toBe(7);
+    for (const [sequence, reminder] of bySequence) {
+      const expectedEdge = NOON + sequence * 24 * HOUR + 2 * HOUR;
+      expect(reminder.rung).toBe("REMIND_WITH_FALLBACK_OFFER");
+      expect(reminder.nominalSendAt.getTime()).toBe(expectedEdge + 30 * MINUTE);
+      expect(reminder.payload.kind).toBe("REMIND_WITH_FALLBACK_OFFER");
+      expect(reminder.windowSequence).toBe(sequence);
+    }
+  });
+});
+
+describe("B8 schedule computation — quiet hours integration", () => {
+  it("defers a nominal send instant inside quiet hours to the closing edge (never drops)", () => {
+    // Window ends 00:30 next day => nominal (lead 60) at 23:30 local => deferred to 07:00.
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const task = synthTask({ endsAt: new Date(NOON + 12.5 * HOUR) });
+    const schedule = scheduleOf(
+      harness.engine.computeSchedule({
+        tasks: [task],
+        preferences: synthPreferences(),
+        channels: harness.registry,
+      }),
+    );
+    expect(schedule.reminders).toHaveLength(1);
+    const reminder = schedule.reminders[0]!;
+    expect(reminder.nominalSendAt.toISOString()).toBe("2026-06-10T23:30:00.000Z");
+    expect(reminder.sendAt.toISOString()).toBe("2026-06-11T07:00:00.000Z");
+    expect(reminder.deferredByQuietHours).toBe(true);
+  });
+
+  it("disabled quiet hours leave the nominal instant untouched", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const task = synthTask({ endsAt: new Date(NOON + 12.5 * HOUR) });
+    const schedule = scheduleOf(
+      harness.engine.computeSchedule({
+        tasks: [task],
+        preferences: synthPreferences({ quietHours: noQuietHours() }),
+        channels: harness.registry,
+      }),
+    );
+    const reminder = schedule.reminders[0]!;
+    expect(reminder.deferredByQuietHours).toBe(false);
+    expect(reminder.sendAt.getTime()).toBe(reminder.nominalSendAt.getTime());
+  });
+});
+
+describe("B8 schedule computation — determinism", () => {
+  const endsAt = new Date(NOON + 2 * HOUR);
+
+  function buildInput(registry: ChannelRegistry) {
+    return {
+      tasks: [synthTask({ id: synthTaskId(1), endsAt }), synthTask({ id: synthTaskId(2), endsAt })],
+      preferences: synthPreferences({ quietHours: noQuietHours() }),
+      channels: registry,
+    };
+  }
+
+  it("computing twice over unchanged inputs yields byte-identical schedules", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const input = buildInput(harness.registry);
+    const first = scheduleOf(harness.engine.computeSchedule(input));
+    const second = scheduleOf(harness.engine.computeSchedule(input));
+    expect(second).toEqual(first);
+    expect(serializeReminderSchedule(second)).toBe(serializeReminderSchedule(first));
+  });
+
+  it("a serialized re-instantiation (fresh engine, fresh equal inputs) reproduces the schedule byte-for-byte", () => {
+    const firstHarness = buildNotificationHarness({ epochMs: NOON, seed: "b8-seed" });
+    const first = scheduleOf(firstHarness.engine.computeSchedule(buildInput(firstHarness.registry)));
+    const serialized = serializeReminderSchedule(first);
+
+    // The serialized schedule round-trips as JSON with the expected shape.
+    const revived = JSON.parse(serialized) as { reminders: unknown[]; skipped: unknown[] };
+    expect(revived.reminders).toHaveLength(2);
+    expect(revived.skipped).toHaveLength(0);
+
+    // Re-instantiated engine + re-built inputs => identical bytes.
+    const secondHarness = buildNotificationHarness({ epochMs: NOON, seed: "b8-seed" });
+    const second = scheduleOf(secondHarness.engine.computeSchedule(buildInput(secondHarness.registry)));
+    expect(serializeReminderSchedule(second)).toBe(serialized);
+  });
+
+  it("reminder ids are stable across engine instances and distinct across channels", () => {
+    const firstHarness = buildNotificationHarness({ epochMs: NOON, seed: "a" });
+    const secondHarness = buildNotificationHarness({ epochMs: NOON, seed: "b" });
+    const first = scheduleOf(firstHarness.engine.computeSchedule(buildInput(firstHarness.registry)));
+    const second = scheduleOf(secondHarness.engine.computeSchedule(buildInput(secondHarness.registry)));
+    expect(second.reminders.map((reminder) => reminder.id)).toEqual(
+      first.reminders.map((reminder) => reminder.id),
+    );
+    const ids = new Set<string>(first.reminders.map((reminder) => reminder.id));
+    expect(ids.size).toBe(first.reminders.length);
+  });
+
+  it("schedules are deterministically ordered (taskId, window, rung, channel)", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const extra = new InMemoryChannel({ id: "aa-first", clock: harness.clock });
+    const registry = new InMemoryChannelRegistry([extra, harness.channel]);
+    const taskA = synthTask({ id: synthTaskId(1), endsAt });
+    const taskB = synthTask({ id: synthTaskId(2), endsAt });
+    // Feed in reverse order; output order must not depend on input order.
+    const schedule = scheduleOf(
+      harness.engine.computeSchedule({
+        tasks: [taskB, taskA],
+        preferences: synthPreferences({ quietHours: noQuietHours() }),
+        channels: registry,
+      }),
+    );
+    const expectedTaskOrder = [taskA.id, taskB.id].sort();
+    expect(schedule.reminders.map((reminder) => reminder.taskId)).toEqual([
+      expectedTaskOrder[0]!,
+      expectedTaskOrder[0]!,
+      expectedTaskOrder[1]!,
+      expectedTaskOrder[1]!,
+    ]);
+    const firstPair = schedule.reminders.slice(0, 2).map((reminder) => reminder.channelId);
+    expect([...firstPair].sort()).toEqual(["aa-first", "inapp-memory"]);
+  });
+});
+
+describe("B8 schedule computation — typed rejections (PHID-safe)", () => {
+  it.each([
+    {
+      label: "local-of-record offset out of range",
+      mutate: (prefs: ReturnType<typeof synthPreferences>) => ({ ...prefs, localUtcOffsetMinutes: 9999 }),
+      kind: "invalid-preferences",
+    },
+    {
+      label: "quiet-hours minutes out of range",
+      mutate: (prefs: ReturnType<typeof synthPreferences>) => ({
+        ...prefs,
+        quietHours: { enabled: true, startLocalMinutes: 2000, endLocalMinutes: 420 },
+      }),
+      kind: "invalid-preferences",
+    },
+    {
+      label: "negative lead",
+      mutate: (prefs: ReturnType<typeof synthPreferences>) => ({ ...prefs, leadMinutes: -5 }),
+      kind: "invalid-preferences",
+    },
+    {
+      label: "duplicate channel preferences",
+      mutate: (prefs: ReturnType<typeof synthPreferences>) => ({
+        ...prefs,
+        channelPreferences: [
+          { channelId: "inapp-memory", enabled: true },
+          { channelId: "inapp-memory", enabled: false },
+        ],
+      }),
+      kind: "invalid-preferences",
+    },
+  ])("rejects preferences where $label", ({ mutate, kind }) => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const preferences = mutate(synthPreferences({ quietHours: noQuietHours() }));
+    const result = harness.engine.computeSchedule({
+      tasks: [synthTask({ endsAt })],
+      preferences,
+      channels: harness.registry,
+    });
+    expect(result).toEqual({ ok: false, error: { kind } });
+  });
+
+  it("rejects channel preferences that reference an unknown channel", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const result = harness.engine.computeSchedule({
+      tasks: [synthTask({ endsAt })],
+      preferences: synthPreferences({
+        quietHours: noQuietHours(),
+        channelPreferences: [{ channelId: "ghost-channel", enabled: true }],
+      }),
+      channels: harness.registry,
+    });
+    expect(result).toEqual({ ok: false, error: { kind: "unknown-channel" } });
+  });
+
+  it("rejects labels that are not human-safe", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const result = harness.engine.computeSchedule({
+      tasks: [synthTask({ endsAt })],
+      preferences: synthPreferences({ quietHours: noQuietHours() }),
+      channels: harness.registry,
+      labels: { metrics: { "metric-synth-heart-rate": "x".repeat(81) } },
+    });
+    expect(result).toEqual({ ok: false, error: { kind: "invalid-label" } });
+  });
+
+  it.each([
+    {
+      label: "window closes before it opens",
+      build: (): readonly MeasurementTask[] => [
+        synthTask({ startsAt: new Date(NOON + HOUR), endsAt: new Date(NOON) }),
+      ],
+    },
+    {
+      label: "non-canonical task id",
+      build: (): readonly MeasurementTask[] => [
+        synthTask({ id: "not-a-canonical-task-id" as ReturnType<typeof synthTaskId> }),
+      ],
+    },
+    {
+      label: "duplicate task ids in the snapshot set",
+      build: (): readonly MeasurementTask[] => [
+        synthTask({ id: synthTaskId(9) }),
+        synthTask({ id: synthTaskId(9) }),
+      ],
+    },
+  ])("rejects task snapshots where $label", ({ build }) => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const result = harness.engine.computeSchedule({
+      tasks: build(),
+      preferences: synthPreferences({ quietHours: noQuietHours() }),
+      channels: harness.registry,
+    });
+    expect(result).toEqual({ ok: false, error: { kind: "invalid-task-snapshot" } });
+  });
+
+  it("rejects a registry carrying a channel without an id", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const rogue: NotificationChannel = new InMemoryChannel({ id: "", clock: harness.clock });
+    const registry: ChannelRegistry = {
+      all: () => [rogue],
+      get: (channelId) => (channelId === "" ? rogue : undefined),
+    };
+    const result = harness.engine.computeSchedule({
+      tasks: [synthTask({ endsAt })],
+      preferences: synthPreferences({ quietHours: noQuietHours() }),
+      channels: registry,
+    });
+    expect(result).toEqual({ ok: false, error: { kind: "invalid-channel" } });
+  });
+});
+
+describe("B8 schedule computation — structural PHI minimization", () => {
+  it("scheduled reminders never carry a person id (payloads stay person-free)", () => {
+    const harness = buildNotificationHarness({ epochMs: NOON });
+    const personId = synthPersonId();
+    const schedule = scheduleOf(
+      harness.engine.computeSchedule({
+        tasks: [synthTask({ personId, endsAt })],
+        preferences: synthPreferences({ personId, quietHours: noQuietHours() }),
+        channels: harness.registry,
+      }),
+    );
+    const dump = serializeReminderSchedule(schedule);
+    expect(dump).not.toContain("personId");
+    expect(JSON.parse(dump).reminders[0]).not.toHaveProperty("personId");
+    // The reminder id is a canonical rem_ id.
+    expect(isReminderId(schedule.reminders[0]!.id)).toBe(true);
   });
 });

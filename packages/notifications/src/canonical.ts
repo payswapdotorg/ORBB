@@ -1,131 +1,76 @@
 /**
- * Canonical JSON serialization + SHA-256 content hashing (B8).
+ * B8 — Canonical JSON serialization.
  *
- * DETERMINISM CONTRACT: `canonicalJsonStringify` is a pure function of its
- * input VALUE (not of property insertion order, key order, or Date object
- * identity):
- *   - object entries are emitted in lexicographically sorted key order
- *     (UTF-16 code units, `Array.prototype.sort` default),
- *   - `Date` values are serialized as their epoch-millisecond integer,
- *     so two Dates representing the same instant serialize identically
- *     (the property that makes "identical schedule across a serialized
- *     re-instantiation" provable),
- *   - `undefined`-valued object properties are dropped (an absent optional
- *     field and a present-but-undefined field serialize the same — mirrors
- *     `JSON.stringify` semantics under `exactOptionalPropertyTypes`; this
- *     is what keeps the rung-2-only `fallbackOffer` key byte-absent on
- *     rung-1 payloads),
- *   - arrays preserve element order (order is semantic),
- *   - strings escape exactly as `JSON.stringify` escapes them,
- *   - numbers serialize via `JSON.stringify` (ECMAScript-specified
- *     shortest round-trip representation — same value, same string).
+ * Deterministic, byte-stable serialization (sorted object keys
+ * lexicographically, `Date` → ISO-8601 string, arrays in their given
+ * order, `undefined` object members omitted). Identical input structures
+ * ALWAYS serialize to identical bytes — this makes "recomputing the
+ * schedule over unchanged inputs yields byte-identical reminders" a
+ * well-defined, testable property (the `@orbb/intents` EvidencePack
+ * canonical-JSON precedent), and it is the serialization used for TASK_DUE
+ * event payloads (the contracts outbox carries serialized payloads).
  *
- * Non-canonicalizable values (functions, symbols, bigints, non-finite
- * numbers, invalid Dates, cyclic structures) throw
- * {@link NotificationEngineError} — they are programming errors, never
- * expected domain rejections (the typed-result discipline lives in
- * `result.ts`).
- *
- * RECORDED BUDGET NOTE: this module is a local mirror of
- * `@orbb/intents/src/canonical.ts` (same contract, same tests-of-record
- * shape). The package's dependency budget is @orbb/domain +
- * @orbb/testkit + @orbb/measurement (TYPES-ONLY) per the B8 packet;
- * importing the intents lane's helper would add a cross-lane runtime
- * dependency. If the tech lead later extracts a shared canonical/kernel
- * package, both lanes can adopt it mechanically (the intents index
- * records the identical handoff).
+ * Non-serializable structures (functions, symbols, bigints, `undefined`
+ * outside objects, class instances other than `Date`) are rejected with a
+ * PHID-safe `NotificationEngineError` — the engine only ever serializes
+ * its own PHI-free payload shapes.
  */
-import { createHash } from "node:crypto";
 import { NotificationEngineError } from "./errors.js";
+import type { ReminderPayload } from "./payloads.js";
 
-/** Maximum nesting depth accepted before serialization refuses (cycle guard). */
-const MAX_CANONICAL_DEPTH = 64;
-
-/**
- * Serializes `value` into the canonical JSON form described in the module
- * header. Pure and deterministic: two structurally equal values (up to key
- * order and Date identity) always produce the SAME string.
- */
-export function canonicalJsonStringify(value: unknown): string {
-  return serializeCanonical(value, 0);
-}
-
-function serializeCanonical(value: unknown, depth: number): string {
-  if (depth > MAX_CANONICAL_DEPTH) {
-    throw new NotificationEngineError(
-      "invariant-violation",
-      "Canonical JSON serialization exceeded the maximum nesting depth (cyclic structure?).",
-    );
-  }
+/** Serializes any engine-shaped structure to canonical JSON. */
+export function canonicalJson(value: unknown): string {
   if (value === null) {
     return "null";
   }
-  switch (typeof value) {
-    case "boolean":
-      return value ? "true" : "false";
-    case "number": {
-      if (!Number.isFinite(value)) {
-        throw new NotificationEngineError(
-          "invariant-violation",
-          "Canonical JSON serialization requires finite numbers.",
-        );
-      }
-      return JSON.stringify(value);
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      throw new NotificationEngineError(
+        "invariant-violation",
+        "canonicalJson cannot serialize an invalid Date.",
+      );
     }
+    return JSON.stringify(value.toISOString());
+  }
+  switch (typeof value) {
     case "string":
+    case "number":
+    case "boolean":
       return JSON.stringify(value);
     case "object": {
-      if (value instanceof Date) {
-        const ms = value.getTime();
-        if (Number.isNaN(ms)) {
-          throw new NotificationEngineError(
-            "invariant-violation",
-            "Canonical JSON serialization requires valid Dates.",
-          );
-        }
-        return String(ms);
-      }
       if (Array.isArray(value)) {
-        const elements = value.map((element) => serializeCanonical(element, depth + 1));
-        return `[${elements.join(",")}]`;
+        return `[${value.map((element) => canonicalJson(element)).join(",")}]`;
       }
       const record = value as Record<string, unknown>;
-      const keys = Object.keys(record).sort();
-      const parts: string[] = [];
-      for (const key of keys) {
-        const propertyValue = record[key];
-        if (propertyValue === undefined) {
-          // Absent and present-but-undefined are the same canonical form.
-          continue;
-        }
-        parts.push(`${JSON.stringify(key)}:${serializeCanonical(propertyValue, depth + 1)}`);
-      }
-      return `{${parts.join(",")}}`;
+      const keys = Object.keys(record)
+        .filter((key) => record[key] !== undefined)
+        .sort();
+      const members = keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`);
+      return `{${members.join(",")}}`;
     }
     default:
       throw new NotificationEngineError(
         "invariant-violation",
-        "Canonical JSON serialization requires JSON-shaped values (no functions, symbols, or bigints).",
+        "canonicalJson cannot serialize the provided structure (unsupported runtime value).",
       );
   }
 }
 
-/** SHA-256 of the UTF-8 encoding of `input`, as a 64-character hex string. */
-export function sha256Hex(input: string): string {
-  return createHash("sha256").update(input, "utf8").digest("hex");
+/** Canonical byte-stable serialization of one reminder payload. */
+export function serializeReminderPayload(payload: ReminderPayload): string {
+  return canonicalJson(payload);
 }
 
-/** SHA-256 of the UTF-8 encoding of `input`, as unpadded URL-safe base64 (43 chars). */
-export function sha256Base64Url(input: string): string {
-  return createHash("sha256").update(input, "utf8").digest("base64url");
+/** Input shape of {@link serializeReminderSchedule}. */
+export interface SerializableSchedule {
+  readonly reminders: readonly unknown[];
+  readonly skipped: readonly unknown[];
 }
 
-/**
- * Domain-separated content digest: the base64url SHA-256 of the canonical
- * JSON of `{ domain, value }`. Two different `domain` tags never produce
- * the same digest for related content (entity-kind separation — the same
- * hygiene as the measurement lane's A30 id derivation).
- */
-export function hashWithDomainBase64Url(domain: string, value: unknown): string {
-  return sha256Base64Url(canonicalJsonStringify({ domain, value }));
+/** Canonical byte-stable serialization of a computed reminder schedule. */
+export function serializeReminderSchedule(schedule: SerializableSchedule): string {
+  return canonicalJson({
+    reminders: schedule.reminders,
+    skipped: schedule.skipped,
+  });
 }
