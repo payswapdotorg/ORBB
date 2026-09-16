@@ -6,7 +6,7 @@ implementation_status: M0-M6 COMPLETE (M6: PR #22 + merges 898b574, bd5606f, dd0
 active_worker_slots: 0/3 (M6 closed; M7-A wave packets staged — org model, FHIR mapper, SMART launch)
 latest_green_commit: f6c5ee9 (M6 EXIT merge — battery all-0, e2e 17/17 incl golden journeys #1 #2 #4 #7 + exit harness)
 preview_url: none (Vercel preview pending operator account link; web shell dogfooded locally by lead)
-last_dogfood: 2026-09-10 18:5x UTC — lead exercised the web shell end-to-end (role switch, emphasis, DataBox journey; VLM-verified screenshots)
+last_dogfood: 2026-09-16 07:1x UTC — lead exercised M6 EXIT journey #7 end-to-end on the live app (Today board -> missed Body Weight card w/ REMIND_WITH_FALLBACK_OFFER badge -> observe-only posture default -> SYNTH configured-variant disclosure; VLM-verified screenshots in orbb-ops/dogfood-m6exit/)
 last_audit: 2026-09-15 — repo-truth audit by resident tech lead (STATUS resynced to merged PR #22; was stale pre-merge)
 
 milestone_M0_evidence:
