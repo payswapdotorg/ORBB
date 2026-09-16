@@ -1,10 +1,10 @@
 # ORBB Orchestration Status
 
-current_milestone: M6 — consumer product (B1-B6, B8 COMPLETE; B7+B9 dispatching, B10 in flight)
+current_milestone: M6 — consumer product (B1-B6, B8, B10 COMPLETE; only B7+B9 in flight)
 architecture_status: FROZEN FOR IMPLEMENTATION
-implementation_status: M0-M5 COMPLETE (PRs #4-#21); M6-A COMPLETE (PR #22); M6-B B4/B5/B6+B8 COMPLETE (merges 898b574, bd5606f)
-active_worker_slots: 1/3 (B10 adherence Lane C generating; B7+B9 Lane B packet dispatching; slot A reserved for M6 EXIT verification)
-latest_green_commit: bd5606f (M6-B B4/B5/B6 consumer surfaces merge — battery all-0, e2e 7/7)
+implementation_status: M0-M5 COMPLETE (PRs #4-#21); M6-A COMPLETE (PR #22); M6-B B4/B5/B6+B8+B10 COMPLETE (merges 898b574, bd5606f, dd022c0)
+active_worker_slots: 1/3 (B7+B9 sharing/consent Lane B generating; M6 EXIT verification next)
+latest_green_commit: dd022c0 (M6-B B10 adherence merge — battery all-0, adherence 67 + platform 140)
 preview_url: none (Vercel preview pending operator account link; web shell dogfooded locally by lead)
 last_dogfood: 2026-09-10 18:5x UTC — lead exercised the web shell end-to-end (role switch, emphasis, DataBox journey; VLM-verified screenshots)
 last_audit: 2026-09-15 — repo-truth audit by resident tech lead (STATUS resynced to merged PR #22; was stale pre-merge)
@@ -37,15 +37,16 @@ merged_in_M2:
 - M2 EXIT verified on fresh main 1eca964: frozen install 0, lint 16/16, typecheck 16/16, test 785 passed | 3 DATABASE_URL-gated skips, build 14/14; journey.test.ts explicitly green (upload -> finalize -> retrieval -> audit end-to-end with synthetic data — the M2 exit criterion). Transit note: migration SQL arrived chat-mangled (smart primes/zero-width/identifier reflow); repaired at the integration station against schema.ts ground truth — all 9 drift guards green, PGlite executes the real SQL in every db test.
 
 in_flight:
-- M6-C wave (dispatching 2026-09-16 ~01:00): B7 sharing/revocation UX + B9 consent settings (Lane B packet). B10 adherence abstraction (Lane C) — session live, generating against the base after the sandbox-concurrency modal was cleared (idle completed-work sandboxes released per operator rule).
+- M6-C: B7 sharing/revocation UX + B9 consent settings (Lane B session live, generating). After its merge: M6 EXIT — golden journeys #1 #2 #4 #7 on web + supported mobile paths + lead dogfood.
 
 merged_in_M6:
 - M6-A (PR #22, Lane B): B1 onboarding + B2 intent creation + B3 plan review — first-run journey (persona/metric-interest/source summary, resumable, accessible), guided intent composer with EvidencePack coverage badges, plan review with explainability audit trail + safety badges (approve-with-edits/reject through domain-transition mirror), mobile parity + maestro flows, Playwright golden journey #1 head + ESCALATE variant; web unit 123->217, e2e 6/6; byte-verified sandbox tarball (sha256 6922c71c); merged 55761c8 2026-09-12.
 - M6-B B8 (Lane A, merge 898b574 via branch m6-b-notification-engine a571d6e): @orbb/notifications — deterministic reminder schedule over real MeasurementTask types; REMIND -> REMIND_WITH_FALLBACK_OFFER ladder (fallback offer is data, never a provider order); preference-gated quiet hours (22:00-07:00 default, defer-to-edge never drop); idempotent reminder identity f(task,window,rung,channel,utcDay) + send-attempt ledger (exactly-once); fail-closed NotificationChannel abstraction (typed results, capability flags, SYNTH web-push/email seam doubles with 410-Gone semantics, no network/SDKs); PHI-free payloads proven by decoy-planting not.toContain tests over 7 outbound surfaces; injected clock/id-factory, zero runtime deps; 107 tests. Integration battery on merged tree: install/lint/typecheck/test/build all 0, notifications 107/107, workspace all-green. Delivery survived the evening capacity wall (4 session churn cycles, branch push won).
 - M6-B B4/B5/B6 (Lane B, merge bd5606f via branch m6-b-consumer-surfaces 951ccdc): B4 Today/task flow — web Overview becomes the intent-driven Today surface (frozen task-card contract, least-burden-first, missed-window fallback, complete via existing capture flow, non-gamified progress; typed /api/today stub); B5 observation/provenance detail — full frozen chain drawer with measured-vs-estimated teaching contract + reconciled two-source case; B6 DataBox timeline/search — timeline+collections, search + 4 filters, advanced inspection, honest forthcoming affordances; mobile today/databox/observation-detail screens + 2 maestro flows. web unit 217->289 (34 files), mobile 35->89 (7 files), e2e 7/7 incl NEW golden journey #2 (device import -> reconciliation -> provenance); battery all-0 on merged tree 6fc148a. next-env.d.ts untracked per M6-A convention.
+- M6-B B10 (Lane C, merge dd022c0 via branch m6-b-adherence ec8017d): @orbb/adherence observe-only-by-default enforcement policy — fail-closed policy resolution (type-encoded NO-ENFORCEMENT), triggerOn literal 'missed' only (recovered/on-track never trigger), decision-time authorization gate (typed refusal + audit), explicit scope required, restrictions bounded <= 24h with daily re-authorization; platform adherence seams (token-gated adapters, synthetic native doubles, forged-token guard); adherence 67 + platform 140 tests; battery all-0 on merged tree a3fb979. DUPLICATE-COMPLETION ARBITRATION recorded: the TL insurance implementation (c2e65c5, 71+16 tests, battery-green) stands down as verified fallback — the console delivery pushed first and won on merit (bounded-duration + triggerOn typing + scope requirements). Console-flight losses that triggered the insurance: pod recycle with uncommitted work (flight 1), usage-limit resend rollback (flight 2), capacity assault exhaustion (flight 3); the winning flight delivered server-side AFTER its tab was closed (lesson: closing a tab does not stop the server-side agent).
 
 next_dispatch:
-- M6-C: B7 sharing/revocation UX + B9 consent settings (Lane B, one packet) while B10 (Lane C) finishes -> M6 EXIT: golden journeys #1 #2 #4 #7 pass on web + supported mobile paths.
+- M6-C merge (B7+B9) -> M6 EXIT harness (journeys #1 #2 #4 #7 + dogfood) -> M7 Clinical OS packets (A44-A49, B11-B14, C1).
 
 merged_in_M3:
 - M3-C (PR #13, Lane C): @orbb/auth — SessionService (opaque hashed tokens, atomic rotate), dependency-free WebAuthn (hand-written CBOR, ES256/Ed25519/RS256, none+packed attestation, signCount clone detection), email OTP (single-use/TTL/throttle), recovery codes (hashed, timingSafeEqual), Upstash REST rate-limit adapter (SHAPE-VERIFIED via fetch stub, fail-closed, parity-tested vs in-memory), AccountService seams; zero external runtime deps; 147 tests; lockfile +16/-3.
