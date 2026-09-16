@@ -125,6 +125,12 @@ importers:
       '@eslint/js':
         specifier: ^9.30.0
         version: 9.39.5
+      '@orbb/adherence':
+        specifier: workspace:*
+        version: link:../../packages/adherence
+      '@orbb/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0

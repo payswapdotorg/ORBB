@@ -1,0 +1,88 @@
+# M6 EXIT golden journey #7 (Lane B): "User misses task -> reminder ->
+# fallback provider offered -> authorized restriction applied only if
+# configured" — the Today-screen leg on mobile.
+#
+# The flow asserts the REAL M6-EXIT Today screen additions:
+#   - the missed body-weight task card carries the reminder badge line
+#     (the @orbb/notifications ladder mirror: rung
+#     REMIND_WITH_FALLBACK_OFFER, sent yesterday at 10:00);
+#   - the due blood-pressure task carries its rung-REMIND reminder with
+#     the honest quiet-hours deferral ("deferred to 07:00" — deferred,
+#     never dropped);
+#   - an explicit user action ("View options") opens the fallback-offer
+#     panel (the offer is DATA, never an order; enforcement authority
+#     "none" is shown);
+#   - the restriction-posture section shows the observe-only default
+#     ("No restrictions are configured — nothing happens when you miss a
+#     measurement.");
+#   - the configured-policy SYNTH fixture variant sits behind its
+#     explicit disclosure ("View the configured-policy fixture variant").
+#
+# All asserted strings are SYNTH-marked or architectural labels; nothing
+# here is or resembles real PHI.
+#
+# The first-run onboarding quick-pass mirrors the today flow's tolerant
+# prefix (the Today tab runs the M6-A onboarding on fresh installs;
+# on a resumed session the conditional block is a no-op).
+#
+# MAESTRO_APP_ID: the target app id on the device/emulator
+# (dev build: org.orbb.mobile; or the Expo Go host package id).
+appId: ${MAESTRO_APP_ID}
+name: ORBB journey 7 — missed task, reminder, fallback offer, observe-only posture (M6 EXIT)
+tags:
+  - M6
+  - journey7
+  - exit
+---
+- launchApp
+
+# First-run onboarding quick-pass (Person persona; the same steps the
+# today.yaml flow drives explicitly).
+- runFlow:
+    when:
+      visible: "Welcome to ORBB"
+    commands:
+      - tapOn: "Get started"
+      - tapOn:
+          text: "Person — tracking my own health"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Finish setup"
+
+# The Today surface renders with the journey-#7 chain.
+- assertVisible: "Today"
+- assertVisible: "What you are working toward"
+- assertVisible: "What matters today"
+
+# The MISSED task with its reminder state (the ladder mirror).
+- assertVisible: "Body Weight"
+- assertVisible: "Window missed — was due yesterday at 09:00"
+- assertVisible: "Reminder sent — fallback options offered"
+- assertVisible: "Rung REMIND_WITH_FALLBACK_OFFER · sent yesterday at 10:00"
+
+# The DUE task's reminder with the honest quiet-hours deferral.
+- assertVisible: "Blood Pressure Systolic"
+- assertVisible: "Reminder scheduled"
+- assertVisible: "deferred to 07:00 (the reminder is deferred, never dropped)"
+
+# View the fallback options: the explicit user action opens the offer
+# panel (DATA, never an order).
+- tapOn: "View options"
+- assertVisible: "Fallback options — offered, never ordered."
+- assertVisible: "Enforcement authority: none — a reminder never orders a provider and never applies a restriction."
+- assertVisible: "Provider path: SYNTH-Clinic-A · SYNTH-CHW-2"
+
+# The restriction-posture section: the observe-only default is the
+# loudest truth.
+- assertVisible: "What happens when you miss a measurement"
+- assertVisible: "No restrictions are configured — nothing happens when you miss a measurement."
+- assertVisible: "Restriction posture: observe-only (the default)"
+- assertVisible: "Decision: no-enforcement — Observe-only — nothing restrictive happens"
+
+# The configured-policy fixture variant exists behind its disclosure
+# (the SYNTH label; never the default posture).
+- tapOn: "View the configured-policy fixture variant (SYNTH)"
+- assertVisible: "Restriction posture: configured policy (SYNTH fixture variant)"
+- assertVisible: "No policy is configured for you"
+- assertVisible: "Decision: restriction-authorized — Restriction authorized — under an explicit, authorized, configured policy only"

@@ -4,7 +4,7 @@
  * zero PHI, byte-stable ids so Playwright assertions stay exact.
  *
  * Seed state:
- *   - one ACTIVE share with the full contract shape (Dr. Rivera /
+ *   - one ACTIVE share with the full contract shape (Dr. Rivera (SYNTH) /
  *     care monitoring / heart-rate + blood-pressure / the pinned
  *     reference window / no derived data / no re-sharing) + ONE
  *     `viewed` access event;

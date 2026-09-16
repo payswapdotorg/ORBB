@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, DueWindow, Heading, Text } from "@orbb/ui";
 import { TaskCard } from "./task-card";
+import { AdherencePostureCard } from "./adherence-posture";
 import { ManualCaptureFlow } from "@/components/measurements/manual-capture-flow";
+import {
+  isTodayAdherenceResponse,
+  type TodayAdherencePostureWire,
+} from "@/lib/adherence/types";
+import {
+  isTodayRemindersResponse,
+  type TodayReminderWire,
+} from "@/lib/reminders/types";
 import {
   isTodayCompleteResponse,
   isTodayErrorEnvelope,
@@ -13,21 +22,30 @@ import {
 } from "@/lib/today/types";
 
 /**
- * Today surface (M6-B B4) — the intent-driven Overview content: what the
- * person is trying to accomplish, what matters today, which measurement is
- * due, why, and the easiest valid way to complete it. NOT a dashboard of
- * charts (the summary chart card stays on Measurements).
+ * Today surface (M6-B B4 + the M6-EXIT journey-#7 chain) — the
+ * intent-driven Overview content: what the person is trying to
+ * accomplish, what matters today, which measurement is due, why, and
+ * the easiest valid way to complete it. NOT a dashboard of charts.
  *
  * Composition:
  * - the intent focus list (objective + plan + conservative per-intent
  *   progress — completed/due counts only, never gamified);
- * - the task cards (§Measurement task UX, see `task-card.tsx`);
+ * - the task cards (§Measurement task UX, see `task-card.tsx`) now
+ *   carrying the journey-#7 reminder badge line (the @orbb/notifications
+ *   ladder mirror) and the missed-window fallback-offer affordance;
+ * - the restriction-posture card (the @orbb/adherence mirror): the
+ *   observe-only default is the loudest truth; the configured-policy
+ *   SYNTH fixture variant sits behind an explicit disclosure;
  * - the completion route REUSES the existing M4-B manual-capture flow
  *   (`ManualCaptureFlow`, preselected metric via `initialShapeId`); on
  *   submit the task transitions open -> completed through `/api/today`
  *   and the surface re-reads progress;
  * - the completion result carries a provenance affordance (B5 link into
  *   the Measurements observation detail).
+ *
+ * GRACEFUL DEGRADE (recorded): the reminder and adherence-posture reads
+ * are ADDITIVE chain legs — a failure there never breaks the task board;
+ * a polite note states what is missing (never silent).
  *
  * Accessibility: view state changes and completions are announced through
  * a polite live region; the loading and error states are polite-status,
@@ -41,6 +59,9 @@ export function TodaySurface() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [intents, setIntents] = useState<readonly TodayIntentSummary[]>([]);
   const [tasks, setTasks] = useState<readonly TodayTaskView[]>([]);
+  const [reminders, setReminders] = useState<readonly TodayReminderWire[]>([]);
+  const [posture, setPosture] = useState<TodayAdherencePostureWire | null>(null);
+  const [fixtureVariant, setFixtureVariant] = useState<TodayAdherencePostureWire | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState<string | null>(null);
   const [completedProvenance, setCompletedProvenance] = useState<{
@@ -53,9 +74,24 @@ export function TodaySurface() {
   const load = useCallback(async () => {
     setPhase((current) => (current === "ready" ? "ready" : "loading"));
     setErrorMessage(null);
+    // EACH chain read that degrades states its own polite note (never
+    // silent, never collapsing two failures into one message).
+    const chainNotes: string[] = [];
     try {
-      const response = await fetch("/api/today");
-      const payload: unknown = await response.json().catch(() => null);
+      // The task board read and the two journey-#7 chain reads run
+      // together; each chain read degrades gracefully on its own.
+      const [todayRequest, remindersRequest, adherenceRequest] = await Promise.all([
+        fetch("/api/today").then((response) =>
+          response.json().then((payload: unknown) => ({ response, payload })),
+        ),
+        fetch("/api/today/reminders").then(
+          (response) => response.json().catch(() => null),
+        ).catch(() => null),
+        fetch("/api/today/adherence").then(
+          (response) => response.json().catch(() => null),
+        ).catch(() => null),
+      ]);
+      const { response, payload } = todayRequest;
       if (response.ok && isTodayListResponse(payload)) {
         setIntents(payload.intents);
         setTasks(payload.tasks);
@@ -63,9 +99,36 @@ export function TodaySurface() {
       } else if (!response.ok && isTodayErrorEnvelope(payload)) {
         setErrorMessage(`Could not load today's plan: ${payload.error.message}`);
         setPhase("error");
+        return;
       } else {
         setErrorMessage("Could not load today's plan: unexpected response.");
         setPhase("error");
+        return;
+      }
+      if (isTodayRemindersResponse(remindersRequest)) {
+        setReminders(remindersRequest.reminders);
+      } else {
+        setReminders([]);
+        chainNotes.push(
+          "Reminder state could not be loaded — the task list is unaffected.",
+        );
+      }
+      if (
+        isTodayAdherenceResponse(adherenceRequest) &&
+        isPostureWire(adherenceRequest.posture) &&
+        isPostureWire(adherenceRequest.fixtureVariant)
+      ) {
+        setPosture(adherenceRequest.posture);
+        setFixtureVariant(adherenceRequest.fixtureVariant);
+      } else {
+        setPosture(null);
+        setFixtureVariant(null);
+        chainNotes.push(
+          "The restriction-posture summary could not be loaded — the task list is unaffected.",
+        );
+      }
+      if (chainNotes.length > 0) {
+        setAnnouncement(chainNotes.join(" "));
       }
     } catch {
       setErrorMessage("Could not load today's plan: network error.");
@@ -78,6 +141,7 @@ export function TodaySurface() {
   }, [load]);
 
   const activeTask = tasks.find((task) => task.taskId === activeTaskId) ?? null;
+  const reminderByTask = new Map(reminders.map((reminder) => [reminder.taskId, reminder]));
 
   /** Fires when the mounted capture flow stored a capture for the task. */
   async function handleCaptured(result: {
@@ -112,6 +176,17 @@ export function TodaySurface() {
         );
         setActiveTaskId(null);
         completingRef.current = null;
+        // Completing silences the reminder ladder (the B8 rule): the
+        // surface re-reads the chain so the card's reminder line clears.
+        try {
+          const refreshed = await fetch("/api/today/reminders");
+          const payload2: unknown = await refreshed.json().catch(() => null);
+          if (refreshed.ok && isTodayRemindersResponse(payload2)) {
+            setReminders(payload2.reminders);
+          }
+        } catch {
+          // The board already updated; a stale reminder line is cosmetic.
+        }
       } else if (!response.ok && isTodayErrorEnvelope(payload)) {
         setAnnouncement(
           `The capture was saved, but the task could not be completed: ${payload.error.message}`,
@@ -191,6 +266,7 @@ export function TodaySurface() {
                 <TaskCard
                   key={task.taskId}
                   task={task}
+                  reminder={reminderByTask.get(task.taskId)}
                   completing={task.taskId === activeTaskId}
                   onComplete={(selected) => {
                     completingRef.current = selected.taskId;
@@ -203,6 +279,12 @@ export function TodaySurface() {
               ))}
             </ul>
           </section>
+
+          {posture !== null && fixtureVariant !== null ? (
+            <section aria-label="What happens when you miss a measurement">
+              <AdherencePostureCard posture={posture} fixtureVariant={fixtureVariant} />
+            </section>
+          ) : null}
 
           {activeTask !== null ? (
             <section aria-label="Complete your measurement" data-today-capture={activeTask.taskId}>
@@ -266,5 +348,20 @@ export function TodaySurface() {
         </>
       ) : null}
     </div>
+  );
+}
+
+/** Structural check for a posture wire view (defense in depth). */
+function isPostureWire(value: unknown): value is TodayAdherencePostureWire {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const posture = value as Record<string, unknown>;
+  return (
+    (posture.variant === "observe-only" || posture.variant === "configured-policy") &&
+    typeof posture.defaultLine === "string" &&
+    typeof posture.summaryLine === "string" &&
+    typeof posture.decision === "object" &&
+    posture.decision !== null
   );
 }
