@@ -1,0 +1,26 @@
+{
+  "name": "@orbb/notifications",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Notification/reminder engine for ORBB (M6-B Lane A, B8): deterministic reminder-schedule computation over real measurement-task snapshots (types imported from @orbb/measurement) with upcoming-due reminders, missed-window detection, and the gentle REMIND -> REMIND_WITH_FALLBACK_OFFER escalation ladder whose fallback offer is DATA (the method vocabulary recorded on the task — the engine never orders a provider); preference-gated quiet hours (default 22:00-07:00 local-of-record, defer-to-edge, never silent drop); deterministic reminder identity f(task, window, rung, channel, UTC day) with a send-attempt ledger for exactly-once dispatch; a fail-closed NotificationChannel abstraction (typed send results, capability flags, SYNTH web-push/email provider doubles — no network, no SDKs); and PHI-free reminder payloads (ids + human-safe labels only) proven by not.toContain tests. Interface-driven: injected clock/id-factory/registries/ledger/directories; zero runtime dependencies.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "@orbb/domain": "workspace:*",
+    "@orbb/measurement": "workspace:*",
+    "@orbb/testkit": "workspace:*",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}
