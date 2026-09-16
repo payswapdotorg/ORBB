@@ -13,6 +13,11 @@
  * HealthKit/Health Connect seams + the M4 exit harness scaffolding,
  * which consume the domain types and the observability logger (workspace
  * dependencies only).
+ *
+ * Additively (B10, Lane C packet M6-B): the adherence enforcement
+ * capability seam (`adherence/index.js`) — AdherenceCapabilityAdapter
+ * + iOS focus / Android usage-access TypeScript seams with synthetic
+ * native doubles, driven only by @orbb/adherence policy decisions.
  */
 export * from "./webhost.js";
 export * from "./httpruntime.js";
@@ -24,3 +29,4 @@ export * from "./ratelimiter.js";
 export * from "./environments.js";
 export * from "./inmemory.js";
 export * from "./health/index.js";
+export * from "./adherence/index.js";

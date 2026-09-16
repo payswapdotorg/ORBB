@@ -1,0 +1,30 @@
+{
+  "name": "@orbb/adherence",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Adherence enforcement abstraction for ORBB (M6-B B10, Lane C): pure per-task adherence evaluation (on-track | missed | recovered) over the real scheduler task/window types with a full audit trail and deterministic replay; an explicit, versioned, non-punitive AdherencePolicy model that fail-closes to NO-ENFORCEMENT when absent or malformed; an injected consent/access-grant-shaped authorization gate that must pass at decision time (configured-but-unauthorized is a typed refusal with an audit record, never a silent pass); and the RestrictionDecision token — the only value OS capability adapters accept as authorization to act. Observe-only by default; restrictions are bounded and exist only under explicit, authorized, configured policy. Zero external runtime dependencies.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@orbb/domain": "workspace:*",
+    "@orbb/measurement": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "@orbb/observability": "workspace:*",
+    "@orbb/platform": "workspace:*",
+    "@orbb/testkit": "workspace:*",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}
