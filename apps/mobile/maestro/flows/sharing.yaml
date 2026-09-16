@@ -1,0 +1,53 @@
+# M6-C sharing journey (Lane B): the DataBox share entry — the active
+# contracts list, revoke-with-confirm (Keep active first — the confirm
+# step is real), the access-history audit trail, and the honest
+# answer-only preview note.
+#
+# All asserted strings are SYNTH-marked or architectural labels; nothing
+# here is or resembles real PHI.
+#
+# MAESTRO_APP_ID: the target app id on the device/emulator
+# (dev build: org.orbb.mobile; or the Expo Go host package id).
+appId: ${MAESTRO_APP_ID}
+name: ORBB sharing journey (M6-C)
+tags:
+  - M6
+  - sharing
+---
+- launchApp
+
+# First-run onboarding quick-pass (the databox.yaml pattern: no-op on a
+# resumed session).
+- runFlow:
+    when:
+      visible: "Welcome to ORBB"
+    commands:
+      - tapOn: "Get started"
+      - tapOn: "Person"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Continue"
+      - tapOn: "Start using ORBB"
+
+- tapOn: "DataBox"
+- assertVisible: "Your personal health evidence store"
+
+# The sharing entry from the DataBox surface.
+- tapOn: "Sharing — review contracts, revoke access, see the audit trail"
+
+# The seeded contracts render (one active clinician share).
+- assertVisible: "Dr. Ana Rivera (SYNTH clinician)"
+- assertVisible: "Active share"
+
+# The access-history audit trail is visible.
+- assertVisible: "Access history"
+
+# Revoke with confirm: the confirm box states what stops happening.
+- tapOn: "Revoke share with Dr. Ana Rivera (SYNTH clinician)"
+- assertVisible: "immediately stop being able to view or export"
+- tapOn: "Keep active"
+- assertVisible: "Active share"
+
+# Back to the DataBox.
+- tapOn: "← DataBox"
+- assertVisible: "Your personal health evidence store"

@@ -9,6 +9,7 @@ import { HealthScreen } from "./screens/health-screen";
 import { OnboardingScreen } from "./screens/onboarding-screen";
 import { TodayScreen } from "./screens/today-screen";
 import { DataboxScreen } from "./screens/databox-screen";
+import { YouScreen } from "./screens/you-screen";
 import { color, typography } from "@orbb/ui/tokens";
 
 /**
@@ -87,6 +88,9 @@ export default function App() {
               }
               if (tab.key === "databox") {
                 return <DataboxScreen />;
+              }
+              if (tab.key === "you") {
+                return <YouScreen />;
               }
               return <PlaceholderScreen title={tab.label} note={tab.note} />;
             }}
