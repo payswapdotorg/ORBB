@@ -1,0 +1,10 @@
+{
+  "id": "patient-201b42ab6ac9cf8a076ec37e594682e5",
+  "identifier": [
+    {
+      "system": "https://orbb.test/synth/id/person",
+      "value": "prsn_SYNTH000000000001"
+    }
+  ],
+  "resourceType": "Patient"
+}

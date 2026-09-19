@@ -1,0 +1,59 @@
+{
+  "category": [
+    {
+      "coding": [
+        {
+          "code": "vital-signs",
+          "system": "https://orbb.test/synth/vocab/metric-category"
+        }
+      ]
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "code": "SYNTH-8480-5",
+        "display": "Systolic Blood Pressure",
+        "system": "https://orbb.test/synth/vocab/metric-code"
+      }
+    ]
+  },
+  "effectiveDateTime": "2026-01-05T07:30:00.000Z",
+  "id": "observation-be0e4a7c8438610fabdae6951eb68e36",
+  "identifier": [
+    {
+      "system": "https://orbb.test/synth/id/observation",
+      "value": "obs_SYNTH00000000000B"
+    }
+  ],
+  "issued": "2026-01-05T07:31:00.000Z",
+  "meta": {
+    "tag": [
+      {
+        "code": "MEASURED",
+        "system": "https://orbb.test/synth/vocab/evidence-label"
+      }
+    ]
+  },
+  "method": {
+    "coding": [
+      {
+        "code": "SYNTH-method-bpsys-manual",
+        "system": "https://orbb.test/synth/vocab/method-code"
+      }
+    ]
+  },
+  "resourceType": "Observation",
+  "status": "entered-in-error",
+  "subject": {
+    "identifier": {
+      "system": "https://orbb.test/synth/id/person",
+      "value": "prsn_SYNTH000000000001"
+    },
+    "reference": "Patient/patient-201b42ab6ac9cf8a076ec37e594682e5"
+  },
+  "valueQuantity": {
+    "unit": "mmHg",
+    "value": 118
+  }
+}

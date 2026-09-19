@@ -1,0 +1,20 @@
+{
+  "birthDate": "1990-01-01",
+  "gender": "unknown",
+  "id": "patient-201b42ab6ac9cf8a076ec37e594682e5",
+  "identifier": [
+    {
+      "system": "https://orbb.test/synth/id/person",
+      "value": "prsn_SYNTH000000000001"
+    }
+  ],
+  "name": [
+    {
+      "family": "SYNTH-Family-0001",
+      "given": [
+        "SYNTH-Given-0001"
+      ]
+    }
+  ],
+  "resourceType": "Patient"
+}
