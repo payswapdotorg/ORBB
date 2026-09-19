@@ -1,0 +1,56 @@
+{
+  "category": [
+    {
+      "coding": [
+        {
+          "code": "activity",
+          "system": "https://orbb.test/synth/vocab/metric-category"
+        }
+      ]
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "code": "SYNTH-83471-4",
+        "display": "Exercise Completed",
+        "system": "https://orbb.test/synth/vocab/metric-code"
+      }
+    ]
+  },
+  "effectiveDateTime": "2026-01-08T06:45:00.000Z",
+  "id": "observation-33709b31fa52f5766c3b14267f2523d6",
+  "identifier": [
+    {
+      "system": "https://orbb.test/synth/id/observation",
+      "value": "obs_SYNTH00000000000E"
+    }
+  ],
+  "issued": "2026-01-08T06:50:00.000Z",
+  "meta": {
+    "tag": [
+      {
+        "code": "DERIVED",
+        "system": "https://orbb.test/synth/vocab/evidence-label"
+      }
+    ]
+  },
+  "method": {
+    "coding": [
+      {
+        "code": "SYNTH-method-exercise-watch",
+        "system": "https://orbb.test/synth/vocab/method-code"
+      }
+    ]
+  },
+  "resourceType": "Observation",
+  "status": "entered-in-error",
+  "subject": {
+    "identifier": {
+      "system": "https://orbb.test/synth/id/person",
+      "value": "prsn_SYNTH000000000001"
+    },
+    "reference": "Patient/patient-201b42ab6ac9cf8a076ec37e594682e5"
+  },
+  "valueBoolean": true
+}

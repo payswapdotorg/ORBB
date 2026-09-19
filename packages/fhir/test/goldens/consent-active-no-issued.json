@@ -1,0 +1,56 @@
+{
+  "category": [
+    {
+      "coding": [
+        {
+          "code": "SYNTH-TREATMENT",
+          "system": "https://orbb.test/synth/vocab/purpose-of-use"
+        }
+      ]
+    }
+  ],
+  "id": "consent-2d92fdedab3cc248665ec9cc4e031c44",
+  "identifier": [
+    {
+      "system": "https://orbb.test/synth/id/grant",
+      "value": "grant_SYNTH000000000003"
+    }
+  ],
+  "patient": {
+    "identifier": {
+      "system": "https://orbb.test/synth/id/person",
+      "value": "prsn_SYNTH000000000001"
+    },
+    "reference": "Patient/patient-201b42ab6ac9cf8a076ec37e594682e5"
+  },
+  "provision": {
+    "action": [
+      {
+        "coding": [
+          {
+            "code": "observations:read",
+            "system": "https://orbb.test/synth/vocab/scope-permission"
+          }
+        ]
+      }
+    ],
+    "period": {
+      "end": "2026-12-31T23:59:59.000Z"
+    },
+    "type": "permit"
+  },
+  "resourceType": "Consent",
+  "scope": {
+    "coding": [
+      {
+        "code": "patient-privacy",
+        "system": "http://terminology.hl7.org/CodeSystem/consentscope"
+      },
+      {
+        "code": "SYNTH-TREATMENT",
+        "system": "https://orbb.test/synth/vocab/purpose-of-use"
+      }
+    ]
+  },
+  "status": "active"
+}
