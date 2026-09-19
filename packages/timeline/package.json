@@ -1,0 +1,29 @@
+{
+  "name": "@orbb/timeline",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Patient timeline API for ORBB (M7-B A49, Lane A): a pure, deterministic, care-team-authorized longitudinal assembly of a person's health record into an ordered, paginated, provenance-preserving timeline — the frozen observation|task|intent entry union with the ReconciliationService doctrine mirror (ONE canonical entry per same-metric set, per-source provenance, data never discarded), the @orbb/db cursor law mirrored in-package (opaque base64url anchor tuple, page-stable, forward-only, fail-closed), inclusive UTC-ms windowing, and THE exit-criterion gate: every read goes through @orbb/clinical's REAL evaluateCareTeamAccess with the frozen timeline:read scope — deny-by-default absolute, every clinical deny reason mapped to a typed all-or-nothing timeline denial, every decision audited and emitted as a TIMELINE_READ event. Interface-driven: injected store ports/clock/id-factory; ZERO db imports; ZERO external runtime dependencies (@orbb/clinical + @orbb/domain workspace links only; @orbb/measurement and @orbb/testkit are TYPE-ONLY imports). Boundary-shaped, non-authoritative, SYNTH-fixtured.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@orbb/clinical": "workspace:*",
+    "@orbb/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "@orbb/measurement": "workspace:*",
+    "@orbb/testkit": "workspace:*",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}
