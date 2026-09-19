@@ -1,0 +1,56 @@
+{
+  "category": [
+    {
+      "coding": [
+        {
+          "code": "activity",
+          "system": "https://orbb.test/synth/vocab/metric-category"
+        }
+      ]
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "code": "SYNTH-83299-0",
+        "display": "Activity Intensity",
+        "system": "https://orbb.test/synth/vocab/metric-code"
+      }
+    ]
+  },
+  "effectiveDateTime": "2026-01-07T18:00:00.000Z",
+  "id": "observation-b7843bb663d6b63ce7c031b28b2f4f70",
+  "identifier": [
+    {
+      "system": "https://orbb.test/synth/id/observation",
+      "value": "obs_SYNTH00000000000D"
+    }
+  ],
+  "issued": "2026-01-07T19:05:00.000Z",
+  "meta": {
+    "tag": [
+      {
+        "code": "ESTIMATED",
+        "system": "https://orbb.test/synth/vocab/evidence-label"
+      }
+    ]
+  },
+  "method": {
+    "coding": [
+      {
+        "code": "SYNTH-method-activity-app",
+        "system": "https://orbb.test/synth/vocab/method-code"
+      }
+    ]
+  },
+  "resourceType": "Observation",
+  "status": "preliminary",
+  "subject": {
+    "identifier": {
+      "system": "https://orbb.test/synth/id/person",
+      "value": "prsn_SYNTH000000000001"
+    },
+    "reference": "Patient/patient-201b42ab6ac9cf8a076ec37e594682e5"
+  },
+  "valueString": "moderate"
+}

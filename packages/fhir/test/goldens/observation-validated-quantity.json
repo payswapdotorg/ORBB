@@ -1,0 +1,59 @@
+{
+  "category": [
+    {
+      "coding": [
+        {
+          "code": "vital-signs",
+          "system": "https://orbb.test/synth/vocab/metric-category"
+        }
+      ]
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "code": "SYNTH-8867-4",
+        "display": "Heart Rate",
+        "system": "https://orbb.test/synth/vocab/metric-code"
+      }
+    ]
+  },
+  "effectiveDateTime": "2026-01-06T08:15:00.000Z",
+  "id": "observation-4a74d9d36e60e6365bb9ce02d7b032e0",
+  "identifier": [
+    {
+      "system": "https://orbb.test/synth/id/observation",
+      "value": "obs_SYNTH00000000000A"
+    }
+  ],
+  "issued": "2026-01-06T08:20:00.000Z",
+  "meta": {
+    "tag": [
+      {
+        "code": "MEASURED",
+        "system": "https://orbb.test/synth/vocab/evidence-label"
+      }
+    ]
+  },
+  "method": {
+    "coding": [
+      {
+        "code": "SYNTH-method-hr-wearable",
+        "system": "https://orbb.test/synth/vocab/method-code"
+      }
+    ]
+  },
+  "resourceType": "Observation",
+  "status": "final",
+  "subject": {
+    "identifier": {
+      "system": "https://orbb.test/synth/id/person",
+      "value": "prsn_SYNTH000000000001"
+    },
+    "reference": "Patient/patient-201b42ab6ac9cf8a076ec37e594682e5"
+  },
+  "valueQuantity": {
+    "unit": "beats/min",
+    "value": 72
+  }
+}

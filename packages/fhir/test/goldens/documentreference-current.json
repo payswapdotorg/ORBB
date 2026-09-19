@@ -1,0 +1,30 @@
+{
+  "content": [
+    {
+      "attachment": {
+        "contentType": "image/png",
+        "creation": "2026-01-04T11:10:00.000Z",
+        "hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8=",
+        "size": 2048,
+        "url": "evid_SYNTH000000000001"
+      }
+    }
+  ],
+  "date": "2026-01-04T11:12:00.000Z",
+  "id": "documentreference-643ac167a308670e62c4812d8a81d418",
+  "identifier": [
+    {
+      "system": "https://orbb.test/synth/id/evidence",
+      "value": "evid_SYNTH000000000001"
+    }
+  ],
+  "resourceType": "DocumentReference",
+  "status": "current",
+  "subject": {
+    "identifier": {
+      "system": "https://orbb.test/synth/id/person",
+      "value": "prsn_SYNTH000000000001"
+    },
+    "reference": "Patient/patient-201b42ab6ac9cf8a076ec37e594682e5"
+  }
+}

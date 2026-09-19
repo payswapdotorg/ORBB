@@ -1,0 +1,40 @@
+{
+  "basedOn": [
+    {
+      "identifier": {
+        "system": "https://orbb.test/synth/id/plan",
+        "value": "plan_SYNTH000000000001"
+      }
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "code": "SYNTH-8480-5",
+        "display": "Systolic Blood Pressure",
+        "system": "https://orbb.test/synth/vocab/metric-code"
+      }
+    ]
+  },
+  "effectivePeriod": {
+    "end": "2026-01-09T12:00:00.000Z",
+    "start": "2026-01-09T00:00:00.000Z"
+  },
+  "id": "diagnosticreport-09157d7d3c7a3b483d91a5c06178bdf7",
+  "identifier": [
+    {
+      "system": "https://orbb.test/synth/id/task",
+      "value": "task_SYNTH000000000002"
+    }
+  ],
+  "resourceType": "DiagnosticReport",
+  "result": [],
+  "status": "registered",
+  "subject": {
+    "identifier": {
+      "system": "https://orbb.test/synth/id/person",
+      "value": "prsn_SYNTH000000000001"
+    },
+    "reference": "Patient/patient-201b42ab6ac9cf8a076ec37e594682e5"
+  }
+}

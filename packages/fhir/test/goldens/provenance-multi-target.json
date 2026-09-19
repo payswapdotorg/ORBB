@@ -1,0 +1,40 @@
+{
+  "agent": [
+    {
+      "type": {
+        "coding": [
+          {
+            "code": "source",
+            "system": "https://orbb.test/synth/vocab/actor-kind"
+          }
+        ]
+      },
+      "who": {
+        "identifier": {
+          "system": "https://orbb.test/synth/id/source",
+          "value": "src_SYNTH000000000001"
+        }
+      }
+    }
+  ],
+  "id": "provenance-e8bd5a3ea5052f81b71ca3bc93704336",
+  "occurredDateTime": "2026-01-06T08:21:00.000Z",
+  "recorded": "2026-01-06T08:21:00.000Z",
+  "resourceType": "Provenance",
+  "target": [
+    {
+      "identifier": {
+        "system": "https://orbb.test/synth/id/observation",
+        "value": "obs_SYNTH00000000000A"
+      },
+      "reference": "Observation/observation-4a74d9d36e60e6365bb9ce02d7b032e0"
+    },
+    {
+      "identifier": {
+        "system": "https://orbb.test/synth/id/task",
+        "value": "task_SYNTH000000000001"
+      },
+      "reference": "DiagnosticReport/diagnosticreport-1db5830b5a492aecdaa91f00f876f2de"
+    }
+  ]
+}

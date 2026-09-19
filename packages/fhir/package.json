@@ -1,0 +1,26 @@
+{
+  "name": "@orbb/fhir",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic internal-to-FHIR R4 boundary mapper for ORBB (M7-A A46): pure functions mapping ORBB domain objects (PersonId, Observation, measurement task/attempt sets, HealthIntent, EvidenceObject records, AccessGrant, Provenance) to FHIR R4 JSON for Patient/Observation/DiagnosticReport/Condition/DocumentReference/Consent/Provenance, with domain-separated deterministic resource ids, canonical (sorted-key, byte-stable) serialization, privacy-first defaults (identifier-only Patient unless a deliberate DemographicPort is supplied), fail-closed typed mapping errors on malformed input or unknown vocabulary, and the stable-provenance linkage invariant. One direction only: ORBB in, FHIR out (ingestion is a future-milestone handoff). Zero runtime dependencies (type-only @orbb/domain and @orbb/measurement imports + node:crypto).",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "@orbb/domain": "workspace:*",
+    "@orbb/measurement": "workspace:*",
+    "@orbb/testkit": "workspace:*",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}

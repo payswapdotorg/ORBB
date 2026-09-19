@@ -1,0 +1,43 @@
+{
+  "clinicalStatus": {
+    "coding": [
+      {
+        "code": "resolved",
+        "system": "http://terminology.hl7.org/CodeSystem/condition-clinical"
+      }
+    ]
+  },
+  "code": {
+    "coding": [
+      {
+        "code": "SYNTH-29463-7",
+        "display": "Body Weight",
+        "system": "https://orbb.test/synth/vocab/metric-code"
+      }
+    ]
+  },
+  "id": "condition-700a1aefad1ce9f61ff486920143b86f",
+  "identifier": [
+    {
+      "system": "https://orbb.test/synth/id/intent",
+      "value": "intent_SYNTH000000000002"
+    }
+  ],
+  "recordedDate": "2026-01-03T10:00:00.000Z",
+  "resourceType": "Condition",
+  "subject": {
+    "identifier": {
+      "system": "https://orbb.test/synth/id/person",
+      "value": "prsn_SYNTH000000000001"
+    },
+    "reference": "Patient/patient-201b42ab6ac9cf8a076ec37e594682e5"
+  },
+  "verificationStatus": {
+    "coding": [
+      {
+        "code": "provisional",
+        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status"
+      }
+    ]
+  }
+}
