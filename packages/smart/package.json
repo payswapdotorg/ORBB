@@ -1,0 +1,26 @@
+{
+  "name": "@orbb/smart",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SMART-on-FHIR launch boundary for ORBB (M7-A A47): total, fail-closed parsing of EHR launch parameters (https iss with host, opaque launch handle, audience expectation — unknown parameters recorded as names only), a FROZEN read-shaped scope grammar (patient/<ResourceType>.rs over an allow-list of Patient/Observation/Condition/DocumentReference), deny-by-default scope evaluation plus launch/standing-grant intersection (a launch alone grants nothing — composition with the kernel access evaluation is required, never duplicated), the SmartTokenExchange seam with InMemoryTokenExchange and SynthEhrExchange SYNTH doubles (opaque tokens hashed at rest per the @orbb/auth discipline — never a JWT with embedded PHI), and an audit-record shape for every validation/exchange outcome (injected clock + id factory, iss host only). Zero network calls; zero external runtime dependencies (node:crypto + @orbb/testkit seams only). Real EHR integration is a recorded handoff, NOT shipped here.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@orbb/testkit": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}
