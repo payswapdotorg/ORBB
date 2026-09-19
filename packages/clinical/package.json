@@ -1,0 +1,25 @@
+{
+  "name": "@orbb/clinical",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Clinical organization/clinic/practitioner domain for ORBB (M7-A A44 + A45, Lane A): the A44 entity model — Organization, Clinic, and Practitioner aggregates with kernel-discipline transition tables (practitioner verification is an explicit, auditable step, never implied) plus PractitionerOrganizationMembership and PractitionerClinicAffiliation aggregates with a frozen role vocabulary — and the A45 patient-linking and care-team permissions model: the consent-shaped PatientLink lifecycle (a practitioner may request but NEVER self-confirm; an unconfirmed link confers NOTHING), the additive-event CareTeam composition, and the pure deny-by-default care-team permission evaluator layered ON TOP of the real kernel access evaluation (@orbb/domain AccessGrant + evaluateAccess) — every failure mode denies with a distinct typed reason and every decision carries an audit record shaped for access_audits. Boundary-shaped, non-authoritative, SYNTH-fixtured. Zero external runtime dependencies.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@orbb/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0",
+    "vitest": "^3.2.4"
+  }
+}
